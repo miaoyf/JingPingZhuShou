@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">李跳跳复刻</string>
+    <string name="accessibility_service_label">李跳跳复刻服务</string>
+    <string name="accessibility_service_description">本服务在本地匹配已安装应用的界面文本，自动点击跳过开屏广告。所有数据仅保存在本机，不收集、不上传任何信息。</string>
+    <string name="main_title">李跳跳复刻</string>
+    <string name="main_subtitle">自动跳过开屏广告</string>
+    <string name="main_service_switch">无障碍服务</string>
+    <string name="main_service_on">服务已开启</string>
+    <string name="main_service_off">服务未开启，点击开关前往系统设置</string>
+    <string name="main_generic_switch">通用开屏广告跳过</string>
+    <string name="main_info_format">内置规则库：%1$d 个应用 / %2$d 条规则。通用跳过已%3$s。</string>
+    <string name="main_info_generic_on">开启</string>
+    <string name="main_info_generic_off">关闭</string>
+    <string name="main_info_format_offline">全部规则内置在本机，不联网、不收集任何信息。</string>
+    <string name="main_info_combined">%1$s\n%2$s</string>
+    <string name="guide_title">请先开启无障碍服务</string>
+    <string name="guide_message">1. 点击下方「去开启」按钮\n2. 在系统设置中找到「李跳跳复刻服务」并打开\n3. 返回本应用即可看到「服务已开启」\n\n提示：华为、小米等机型可能需要先在「设置 → 关于手机」连点版本号开启开发者选项。</string>
+    <string name="guide_confirm">去开启</string>
+    <string name="main_app_settings">应用设置</string>
+    <string name="app_setting_title">应用设置</string>
+    <string name="app_setting_subtitle">对单个应用开启或关闭自动跳过</string>
+    <string name="app_setting_rules_title">%1$s 的内置规则</string>
+    <string name="app_setting_rule_line">%1$s / %2$s（%3$d 次）</string>
+    <string name="app_setting_rules_empty">该应用暂无内置规则</string>
+</resources>
