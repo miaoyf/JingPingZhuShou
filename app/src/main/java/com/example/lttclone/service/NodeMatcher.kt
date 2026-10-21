@@ -101,6 +101,11 @@ object NodeMatcher {
         return rect
     }
 
+    fun boundsKey(bounds: Rect): String =
+        bounds.left.toString() + "," + bounds.top + "," + bounds.right + "," + bounds.bottom
+
+    fun boundsKey(node: AccessibilityNodeInfo): String? = boundsOf(node)?.let { boundsKey(it) }
+
     private fun boundsScore(node: AccessibilityNodeInfo, bounds: Rect): Int {
         val rect = boundsOf(node) ?: return 0
         if (!near(rect.left, bounds.left)) return 0

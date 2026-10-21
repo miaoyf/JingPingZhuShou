@@ -23,6 +23,9 @@ class RuleMatcher(
         val acted = HashSet<String>()
         val methods = HashMap<String, Int>()
         val switches = HashMap<String, Int>()
+        val checks = HashMap<String, (List<AccessibilityNodeInfo>) -> Boolean>()
+        val ruleBounds = HashSet<String>()
+        val genericBounds = HashSet<String>()
         var genericActed = false
         var rounds = 0
         var idleRounds = 0
@@ -51,10 +54,14 @@ class RuleMatcher(
         }
         session.rounds++
         var acted = false
+        var ruleActed = false
         val root = runCatching { service.rootInActiveWindow }.getOrNull()
         if (root != null) {
             val nodes = NodeMatcher.collectNodes(root)
             val rules = rulesProvider(session.packageName)
+            if (session.rounds == 1) {
+                Log.i(TAG, "scan pkg=${session.packageName} nodes=${nodes.size} rules=${rules?.popupRules?.size ?: -1}")
+            }
             if (rules != null) {
                 for (rule in rules.popupRules) {
                     val key = ruleKey(rule)
@@ -62,16 +69,27 @@ class RuleMatcher(
                     val idNode = locate(nodes, rule.id)
                     val actionNode = locate(nodes, rule.action)
                     if (idNode == null && actionNode == null) continue
-                    if (dispatch(session, rule, idNode, actionNode, 0)) acted = true
+                    if (dispatch(session, rule, idNode, actionNode, 0, null, session.ruleBounds)) {
+                        acted = true
+                        ruleActed = true
+                    }
                 }
             }
-            if (genericProvider() && !session.genericActed) {
+            if (!ruleActed && genericProvider() && !session.genericActed) {
                 val metrics = service.resources.displayMetrics
-                val candidate = SplashSkipper.findCandidate(nodes, metrics.widthPixels, metrics.heightPixels)
+                val candidate = SplashSkipper.findCandidate(
+                    nodes,
+                    metrics.widthPixels,
+                    metrics.heightPixels,
+                    session.ruleBounds
+                )
                 if (candidate != null) {
                     session.genericActed = true
                     val rule = Rule(GENERIC_ID, GENERIC_ID, GENERIC_TIMES)
-                    if (dispatch(session, rule, candidate, candidate, 0)) {
+                    val check: (List<AccessibilityNodeInfo>) -> Boolean = { current ->
+                        SplashSkipper.findCandidate(current, metrics.widthPixels, metrics.heightPixels) != null
+                    }
+                    if (dispatch(session, rule, candidate, candidate, 0, check, session.genericBounds)) {
                         acted = true
                         onGenericAction?.invoke()
                     }
@@ -100,7 +118,9 @@ class RuleMatcher(
         rule: Rule,
         idNode: AccessibilityNodeInfo?,
         actionNode: AccessibilityNodeInfo?,
-        attempt: Int
+        attempt: Int,
+        verifyCheck: ((List<AccessibilityNodeInfo>) -> Boolean)?,
+        boundsTarget: MutableSet<String>
     ): Boolean {
         if (session.generation != generation) return false
         val key = ruleKey(rule)
@@ -108,6 +128,10 @@ class RuleMatcher(
         val done = perform(rule, idNode, actionNode, method)
         if (done) {
             session.acted.add(key)
+            listOfNotNull(idNode, actionNode).forEach { node ->
+                NodeMatcher.boundsKey(node)?.let { boundsTarget.add(it) }
+            }
+            if (verifyCheck != null) session.checks[key] = verifyCheck
             Log.i(TAG, "acted key=$key method=$method attempt=$attempt")
             if (verifiable(rule)) {
                 handler.postDelayed({ verify(session, rule, key) }, VERIFY_DELAY)
@@ -119,7 +143,7 @@ class RuleMatcher(
             if (session.generation != generation) return@postDelayed
             val root = runCatching { service.rootInActiveWindow }.getOrNull() ?: return@postDelayed
             val nodes = NodeMatcher.collectNodes(root)
-            dispatch(session, rule, locate(nodes, rule.id), locate(nodes, rule.action), attempt + 1)
+            dispatch(session, rule, locate(nodes, rule.id), locate(nodes, rule.action), attempt + 1, verifyCheck, boundsTarget)
         }, RETRY_INTERVAL)
         return false
     }
@@ -128,13 +152,19 @@ class RuleMatcher(
         if (session.generation != generation) return
         val root = runCatching { service.rootInActiveWindow }.getOrNull() ?: return
         val nodes = NodeMatcher.collectNodes(root)
-        val current = locate(nodes, rule.id) ?: locate(nodes, rule.action)
-        if (current == null) return
+        val check = session.checks[key]
+        val stillThere = if (check != null) {
+            runCatching { check(nodes) }.getOrDefault(false)
+        } else {
+            locate(nodes, rule.id) ?: locate(nodes, rule.action) != null
+        }
+        if (!stillThere) return
         val switches = session.switches[key] ?: 0
         if (switches >= MAX_SWITCHES) return
         session.switches[key] = switches + 1
         session.methods[key] = if ((session.methods[key] ?: METHOD_TAP) == METHOD_TAP) METHOD_CLICK else METHOD_TAP
         session.acted.remove(key)
+        if (key.startsWith(GENERIC_ID)) session.genericActed = false
         Log.i(TAG, "verify retry key=$key method=${session.methods[key]}")
     }
 
@@ -216,11 +246,15 @@ class RuleMatcher(
 
     private fun tap(node: AccessibilityNodeInfo): Boolean {
         val bounds = NodeMatcher.boundsOf(node) ?: return false
-        return tapPoint(Point(bounds.exactCenterX().toInt(), bounds.exactCenterY().toInt()))
+        val point = Point(bounds.exactCenterX().toInt(), bounds.exactCenterY().toInt())
+        Log.i(TAG, "tap x=${point.x} y=${point.y} text=${NodeMatcher.textOf(node).replace('\u0000', '|')}")
+        return tapPoint(point)
     }
 
     private fun tapPoint(point: Point): Boolean {
-        val path = Path().apply { moveTo(point.x.toFloat(), point.y.toFloat()) }
+        val path = Path().apply {
+            addCircle(point.x.toFloat(), point.y.toFloat(), TAP_RADIUS, Path.Direction.CW)
+        }
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0L, TAP_DURATION))
             .build()
@@ -238,6 +272,7 @@ class RuleMatcher(
         private const val RESUME_DELAY = 100L
         private const val VERIFY_DELAY = 700L
         private const val TAP_DURATION = 50L
+        private const val TAP_RADIUS = 1.5f
         private const val BACK = "back"
         private const val GLOBAL_BACK = "GLOBAL_ACTION_BACK"
         private const val GENERIC_ID = "__ltt_generic_skip__"

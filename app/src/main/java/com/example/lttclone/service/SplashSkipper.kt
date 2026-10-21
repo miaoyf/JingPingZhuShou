@@ -19,7 +19,8 @@ object SplashSkipper {
     fun findCandidate(
         nodes: List<AccessibilityNodeInfo>,
         screenWidth: Int,
-        screenHeight: Int
+        screenHeight: Int,
+        excluded: Set<String> = emptySet()
     ): AccessibilityNodeInfo? {
         if (nodes.isEmpty()) return null
         var bestNode: AccessibilityNodeInfo? = null
@@ -27,6 +28,7 @@ object SplashSkipper {
         for (node in nodes) {
             val match = score(node) ?: continue
             val bounds = NodeMatcher.boundsOf(node) ?: continue
+            if (excluded.contains(NodeMatcher.boundsKey(bounds))) continue
             if (!acceptable(bounds, screenWidth, screenHeight, match.clickable)) continue
             val total = match.score + if (match.clickable) 25 else 0
             if (total > bestScore) {

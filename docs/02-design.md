@@ -138,8 +138,9 @@ data class AppRules(
    - `action` 为 `x:123y:456` → 按坐标派发手势；
    - 否则在树中独立定位 `action` 对应节点并点击。
 4. **点击策略**
-   - 节点自身 `ACTION_CLICK` → 可点击祖先 `ACTION_CLICK` → `dispatchGesture` 点中心点；
-   - 两种方式可切换：点击后 700ms 回检节点是否仍存在，未消失说明未生效，切换方式重试，最多切 2 次。
+   - 两种方式可切换：**手势点击**（`dispatchGesture`，笔迹为半径 1.5px 的圆点，保证笔迹有实际长度而非零长路径）→ 节点自身 `ACTION_CLICK` → 可点击祖先 `ACTION_CLICK`；也可反向（`METHOD_CLICK`）。
+   - 效果回检：点击后 700ms 重新取窗口节点树，判断目标是否仍然存在；未消失说明未生效，切换点击方式重试，最多切 2 次。
+   - 回检判据按来源区分：普通规则按 `id`/`action` 重新定位；通用跳过按「跳过按钮是否仍存在」判断（`SplashSkipper.findCandidate`）。
 5. **通用开屏跳过（`SplashSkipper`）**
    - 上游规则库以应用内弹窗为主，开屏规则极少，故补充通用启发式：
      - 严格文案正则（长度 ≤ 8）：`跳过` / `跳过广告` / `点击跳过` / `Skip` / `Skip Ad` / `跳过 5` / `5s跳过` / `关闭广告`；
@@ -147,7 +148,9 @@ data class AppRules(
      - 控件 id 含 `skip` 或含 `splash` 且含 `ad`/`btn`。
    - 安全约束：控件面积不超过屏幕 1/4；可点击优先（可点击得分 +25）；不可点击时要求位于屏幕上半部。
    - 生效窗口：应用切到前台后的 15s 内，且每次前台切换只触发一次。
-6. **高级参数**：`times`（失败重试，间隔 200ms）、`delayPopup`（命中后延迟执行）、`clickWayPopup`（强制手势点击）、`searchTimesPopup`（未命中时的重扫轮数）。
+   - 与规则互斥：同一会话内规则已点过的坐标会进入排除集，通用跳过不会再点同一位置，避免重复点击。
+6. **规则来源合并**：`LttService.resolveRules` 同时取「事件来源包」与「前台包」两份规则并合并，标量参数以事件包优先。用于开屏广告由独立广告 SDK 进程/包渲染、事件包名不是目标应用的情况。
+7. **高级参数**：`times`（失败重试，间隔 200ms）、`delayPopup`（命中后延迟执行）、`clickWayPopup`（强制手势点击）、`searchTimesPopup`（未命中时的重扫轮数）。
 
 ## 6. 组件设计
 
@@ -170,7 +173,7 @@ data class AppRules(
 - 单条规则异常：跳过该条，计数，不影响其他。
 - 节点遍历异常：捕获 `IllegalStateException`（节点已失效），跳过。
 - 手势/点击失败：静默降级，按 `times` 重试；点击后回检仍未生效则切换点击方式重试。
-- 日志：TAG 统一为 `LttService`，关键节点用 `Log.i`（`service connected` / `acted key=… method=…`），便于真机 `adb logcat -s LttService` 排查；不落盘、不上传。
+- 日志：TAG 统一为 `LttService`，关键节点用 `Log.i`（`service connected` / `foreground package=…` / `scan pkg=… nodes=… rules=…` / `tap x=… y=… text=…` / `acted key=… method=… attempt=…` / `verify retry key=… method=…`），便于真机 `adb logcat -s LttService` 排查；不落盘、不上传。
 - 不使用崩溃上报 SDK。
 
 ## 8. 安全设计
