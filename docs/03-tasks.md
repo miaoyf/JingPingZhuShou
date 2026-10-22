@@ -3,7 +3,7 @@
 - 版本：v1.0
 - 日期：2026-10-20
 - 依据：`docs/02-design.md`
-- 粒度：7 个批次（每个批次为一次改动后端到端可验证的能力切片）
+- 粒度：8 个批次（每个批次为一次改动后端到端可验证的能力切片）
 
 ## 批次总览
 
@@ -37,6 +37,8 @@
 - [x] 批次6：真机失效排查与匹配引擎增强（详见下方「批次6」小节）
 
 - [x] 批次7：真机可用性加固与真机验证（详见下方「批次7」小节）
+
+- [x] 批次8：逐应用实测与跨窗口/广告 SDK 节点检索增强（详见下方「批次8」小节）
 
 ## 批次6：真机失效排查与匹配引擎增强
 
@@ -93,11 +95,28 @@
     release 包 4,760,792 字节，自签名证书 SHA-256 `1f943f5c969b53b23697606918fba8eace1db73d835359de8fe38c78b4f02a3c`，`aapt2 dump badging` 确认无 `debuggable` 标记。
   - 遗留风险：SurfaceView / 全自绘且无文本、无 contentDescription、无控件 id 的开屏广告（部分短视频类应用）任何无障碍方案都无法识别，属原理性限制。
 
+## 批次8：逐应用实测与跨窗口 / 广告 SDK 节点检索增强
+
+- [x] 批次8：逐应用实测与跨窗口 / 广告 SDK 节点检索增强
+  - 背景：用户反馈「微博无法跳过」，并要求把手机上安装的应用逐个打开验证。逐应用实测暴露出「控件树里明明有跳过按钮，但服务点不到」的共性问题。
+  - 涉及文件：`app/src/main/java/com/example/lttclone/service/RuleMatcher.kt`、`app/src/main/java/com/example/lttclone/service/SplashSkipper.kt`、`app/src/main/res/xml/accessibility_service_config.xml`、`app/src/main/res/xml-v31/accessibility_service_config.xml`、`README.md`、`docs/02-design.md`、`docs/03-tasks.md`
+  - 根因与修复：
+    1. **只取活动窗口**：开屏广告常被渲染在独立窗口（广告 SDK 悬浮窗 / 独立 Activity 窗口），`rootInActiveWindow` 取不到；改为遍历 `AccessibilityService.getWindows()` 的全部可见窗口合并节点。
+    2. **未声明交互窗口标志**：`getWindows()` 在未开启 `flagRetrieveInteractiveWindows` 时返回空列表，导致上一条修复不生效；在 `res/xml` 与 `res/xml-v31` 的 `accessibilityFlags` 中补上该标志后，窗口列表正常返回。
+    3. **包名过滤过严**：节点过滤原本要求包名等于目标应用，广告由独立广告 SDK 包渲染时节点被整体丢弃；改为只排除自身包与系统包。
+    4. **位置限制挡住底部跳过条**：严格命中的短文案（如微博国际版屏幕底部的「跳过」）被「必须位于屏幕上半部」规则拒绝；改为严格命中不再受位置限制，仅保留面积上限。
+  - 验收标准：
+    - 逐应用实测中出现的跳过控件均能触发 `acted key=__ltt_generic_skip__`；
+    - 库内规则与通用跳过互不干扰；
+    - `clean assembleDebug assembleRelease lintDebug` 通过且 lint 零告警。
+  - 完成情况：真机逐个启动 65 个第三方应用并抓取控件树与诊断日志，实测通过的应用包括：拼多多、个人所得税、高德地图、网易云音乐、央广网、QQ 音乐、腾讯会议、闲鱼、腾讯视频、喜马拉雅、微博国际版、央视影音、哔哩哔哩。抖音的开屏为 SurfaceView 自绘，控件树中不存在跳过控件，属原理性限制。
+  - 遗留风险：部分厂商 ROM（如荣耀）会对后台应用做进程冻结并反复 unbind 无障碍服务，需用户手动放行「应用启动管理」；SurfaceView 全自绘开屏无法跳过。
+
 ## 依赖关系
 
 ```
 批次1 → 批次2 → 批次3 → 批次4
                    ↘      ↓
                      批次5
-批次3 + 批次4 ──→ 批次6 ──→ 批次7
+批次3 + 批次4 ──→ 批次6 ──→ 批次7 ──→ 批次8
 ```

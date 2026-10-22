@@ -155,6 +155,9 @@ data class AppRules(
 9. **看门狗与会话重开**：`LttService` 每 2 秒复查一次——前台包名未变、距切前台未超过 15s 窗口期、且本轮尚未成功动作时，重新调用 `matcher.handle(foregroundPackage)` 开启新会话。用于覆盖「广告按钮晚于首个事件数秒才渲染」的情况。
 10. **成功确认语义**：`genericFired` / `actedFlag` 仅在动作**回检通过**后才置位，避免首次手势未生效就把整次通用跳过关闭。
 11. **后台保活**：`KeepAliveService` 以 `specialUse` 类型启动前台服务并常驻最低优先级通知，抵抗系统对后台应用进程的冻结；`LttService.onServiceConnected` 与 `MainActivity` 均会拉起它。
+12. **跨窗口节点检索**：不再只取 `rootInActiveWindow`，而是遍历 `AccessibilityService.getWindows()` 返回的全部可见窗口再合并节点，并排除自身包与系统包节点。开屏广告常被渲染在独立窗口（广告 SDK 悬浮窗 / 独立 Activity 窗口）里，只取活动窗口会漏掉跳过按钮。该能力依赖 `accessibilityFlags` 中的 `flagRetrieveInteractiveWindows`（未声明时 `getWindows()` 返回空列表，已在 `res/xml/accessibility_service_config.xml` 与 `res/xml-v31/accessibility_service_config.xml` 开启）。
+13. **包名过滤放宽**：节点过滤从「必须等于目标应用包名」改为「排除自身包与系统包、其余包（含广告 SDK 包）一律纳入」。解决广告由独立广告 SDK 包渲染时节点被整体过滤掉的问题。
+14. **严格匹配不受位置限制**：`SplashSkipper` 对严格命中的短文案（如「跳过」）不再要求位于屏幕上半部，仅保留「面积不超过屏幕 1/4」的限制，可覆盖屏幕底部的跳过条；非严格命中仍需可点击或位于上半部。
 
 ## 6. 组件设计
 
