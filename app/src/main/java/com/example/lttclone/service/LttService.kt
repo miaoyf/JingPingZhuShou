@@ -1,10 +1,10 @@
 package com.example.lttclone.service
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.example.lttclone.data.AppRules
 import com.example.lttclone.data.Prefs
@@ -19,6 +19,18 @@ class LttService : AccessibilityService() {
     private var foregroundPackage: String? = null
     private var foregroundSince = 0L
     private var genericFired = false
+    private var actedFlag = false
+
+    private val watchdog = object : Runnable {
+        override fun run() {
+            handler.postDelayed(this, WATCHDOG_MS)
+            try {
+                sweep()
+            } catch (t: Throwable) {
+                Diag.log("watchdog error=${t.javaClass.simpleName}")
+            }
+        }
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -26,15 +38,34 @@ class LttService : AccessibilityService() {
             service = this,
             rulesProvider = { pkg -> resolveRules(pkg) },
             genericProvider = { genericAllowed() }
-        ).also { it.onGenericAction = { genericFired = true } }
-        Log.i(TAG, "service connected")
+        ).also {
+            it.onGenericAction = { Diag.log("generic action attempted") }
+            it.onAction = { key -> Diag.log("action attempt key=$key") }
+            it.onVerified = { key ->
+                actedFlag = true
+                if (key.startsWith(RuleMatcher.GENERIC_ID)) genericFired = true
+                Diag.log("action confirmed key=$key")
+            }
+        }
+        Diag.init(this)
+        Diag.log("service connected")
+        KeepAliveService.start(this)
+        handler.removeCallbacks(watchdog)
+        handler.postDelayed(watchdog, WATCHDOG_MS)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val pkg = event?.packageName?.toString() ?: return
+        Diag.log("event type=${event.eventType} pkg=$pkg")
         if (pkg == packageName) return
-        if (!Prefs.isEnabled(this)) return
-        if (!Prefs.isAppEnabled(this, pkg)) return
+        if (!Prefs.isEnabled(this)) {
+            Diag.log("skip: global switch off")
+            return
+        }
+        if (!Prefs.isAppEnabled(this, pkg)) {
+            Diag.log("skip: app switch off pkg=$pkg")
+            return
+        }
         val now = SystemClock.elapsedRealtime()
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             updateForeground(pkg, now)
@@ -51,11 +82,19 @@ class LttService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
+        Diag.log("service interrupted")
         clearPending()
+    }
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        Diag.log("service unbound")
+        clearPending()
+        return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
         clearPending()
+        handler.removeCallbacks(watchdog)
         matcher = null
         super.onDestroy()
     }
@@ -81,13 +120,23 @@ class LttService : AccessibilityService() {
             foregroundPackage = pkg
             foregroundSince = now
             genericFired = false
-            Log.i(TAG, "foreground package=$pkg")
+            actedFlag = false
+            Diag.log("foreground package=$pkg")
             return
         }
         if (now - foregroundSince > SPLASH_WINDOW_MS) {
             foregroundSince = now
             genericFired = false
+            actedFlag = false
         }
+    }
+
+    private fun sweep() {
+        val fg = foregroundPackage ?: return
+        if (actedFlag) return
+        val elapsed = SystemClock.elapsedRealtime() - foregroundSince
+        if (elapsed > SPLASH_WINDOW_MS) return
+        matcher?.handle(fg)
     }
 
     private fun genericAllowed(): Boolean {
@@ -104,8 +153,8 @@ class LttService : AccessibilityService() {
     }
 
     companion object {
-        private const val TAG = "LttService"
         private const val THROTTLE_MS = 120L
         private const val SPLASH_WINDOW_MS = 15000L
+        private const val WATCHDOG_MS = 2000L
     }
 }

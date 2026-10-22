@@ -47,7 +47,7 @@
 ## 4. 非功能需求
 
 - 网络：**不声明 INTERNET 权限**，全部离线。
-- 权限最小化：`QUERY_ALL_PACKAGES`、`BIND_ACCESSIBILITY_SERVICE`（不声明 `INTERNET`，不声明 `POST_NOTIFICATIONS` 等无关权限）。
+- 权限最小化：`QUERY_ALL_PACKAGES`、`BIND_ACCESSIBILITY_SERVICE`、`FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_SPECIAL_USE`、`POST_NOTIFICATIONS`（后三者仅用于后台保活与常驻通知；不声明 `INTERNET`，不声明其它无关权限）。
 - 兼容：minSdk 24、targetSdk 34、compileSdk 34、仅 `arm64-v8a`。
 - 性能：事件回调 100ms 节流；单次遍历节点数设上限，避免主线程卡顿。
 - 稳定性：规则解析失败不崩溃，坏规则跳过并在日志中计数。

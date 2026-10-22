@@ -3,7 +3,7 @@
 - 版本：v1.0
 - 日期：2026-10-20
 - 依据：`docs/02-design.md`
-- 粒度：6 个批次（每个批次为一次改动后端到端可验证的能力切片）
+- 粒度：7 个批次（每个批次为一次改动后端到端可验证的能力切片）
 
 ## 批次总览
 
@@ -36,6 +36,8 @@
 
 - [x] 批次6：真机失效排查与匹配引擎增强（详见下方「批次6」小节）
 
+- [x] 批次7：真机可用性加固与真机验证（详见下方「批次7」小节）
+
 ## 批次6：真机失效排查与匹配引擎增强
 
 - [x] 批次6：真机失效排查与匹配引擎增强
@@ -64,7 +66,32 @@
     3. **修复手势点击失效**：`dispatchGesture` 原用只有 `moveTo` 的零长路径，`dispatchGesture` 返回 true 但实际不产生点击；改为半径 1.5px 的圆形笔迹后实测点击命中；
     4. **修复通用跳过无法回检**：原回检按规则 id/action 重新定位，通用规则 id 为内部标识恒定位不到，导致手势未生效时不会切换为 `ACTION_CLICK`；改为按「跳过按钮是否仍存在」回检；
     5. 规则与通用跳过互斥：规则点过的坐标进入排除集，避免重复点击同一按钮。
-  - 未完成项：真机验证。设备为 HONOR PNM-AN10，macOS 侧只枚举到 HonorSuite 虚拟光驱、**无 adb 接口**（手机未开启 USB 调试），无法抓取真机 logcat。待用户在「开发者选项 → USB 调试」开启并重新插拔授权后补做。
+  - 未完成项：无（真机验证已在批次7 完成）。
+
+## 批次7：真机可用性加固与真机验证
+
+- [x] 批次7：真机可用性加固与真机验证
+  - 背景：真机（荣耀 PNM-AN10 / Android 16 / API 36）连通后，逐项定位到 5 个真实阻断点。
+  - 涉及文件：`app/src/main/java/com/example/lttclone/service/Diag.kt`（新增）、`app/src/main/java/com/example/lttclone/service/KeepAliveService.kt`（新增）、`app/src/main/java/com/example/lttclone/service/LttService.kt`、`app/src/main/java/com/example/lttclone/service/RuleMatcher.kt`、`app/src/main/java/com/example/lttclone/MainActivity.kt`、`app/src/main/res/drawable/ic_stat_keepalive.xml`（新增）、`app/src/main/res/layout/activity_main.xml`、`app/src/main/res/values/strings.xml`、`app/src/main/AndroidManifest.xml`、`app/build.gradle.kts`（release 签名）、`keystore.properties`、`.gitignore`、`README.md`、`docs/01-requirements.md`、`docs/02-design.md`、`docs/03-tasks.md`
+  - 根因与修复：
+    1. **服务从未绑定**：设备把应用设为「调试应用 + 等待调试器」，进程启动即挂起；需清除 `debug_app` / `wait_for_debugger`。
+    2. **自身界面被误点**：通用跳过扫描到了本应用自己的「通用开屏广告跳过」开关文字并点中，把开关持久化成 `generic_splash=false`，导致之后通用跳过全程失效；修复为节点按目标应用包名过滤（`scopedNodes`），并把 `genericFired` 改为「回检确认成功后才置位」。
+    3. **事件通道断流**：系统反复 unbind/rebind 无障碍服务导致事件不再投送；缓解手段为保活前台服务 + 看门狗定期重开会话。
+    4. **扫描时机错位**：开屏广告按钮常在首个事件之后数秒才渲染，而会话空闲 2 秒即结束；新增看门狗每 2 秒复查重开会话（窗口期 15 秒内）。
+    5. **日志不可读**：该 ROM 屏蔽第三方 logcat；改为 logcat + `files/ltt_diag.log` 双通道，并在主界面提供「诊断信息」页。
+  - 验收标准：
+    - 真机（荣耀 PNM-AN10 / Android 16）上对真实开屏广告应用完成一次「点击跳过」闭环；
+    - 通用跳过与库内规则均可触发，且有回检确认日志；
+    - 后台保活前台服务处于 `isForeground=true`；
+    - release 包签名校验通过、无 `debuggable`；
+    - `clean assembleDebug assembleRelease lintDebug` 通过且 lint 零告警。
+  - 完成情况：真机拼多多（`com.xunmeng.pinduoduo`）登录/开屏页实测通过——
+    日志 `tap x=987 y=213 text=跳过` → `acted key=__ltt_generic_skip__ method=0` → `action confirmed key=__ltt_generic_skip__`；
+    随后 `uiautomator dump` 中「跳过」节点数由 1 变为 0，焦点落在 `com.xunmeng.pinduoduo/.ui.activity.HomeActivity`。
+    隔离掉库内 `GLOBAL_ACTION_BACK` 规则后重测，**纯手势点击**同样完成跳过，未依赖返回键兜底。
+    库内规则同样验证命中（拼多多命中 7 条规则）。
+    release 包 4,760,792 字节，自签名证书 SHA-256 `1f943f5c969b53b23697606918fba8eace1db73d835359de8fe38c78b4f02a3c`，`aapt2 dump badging` 确认无 `debuggable` 标记。
+  - 遗留风险：SurfaceView / 全自绘且无文本、无 contentDescription、无控件 id 的开屏广告（部分短视频类应用）任何无障碍方案都无法识别，属原理性限制。
 
 ## 依赖关系
 
@@ -72,5 +99,5 @@
 批次1 → 批次2 → 批次3 → 批次4
                    ↘      ↓
                      批次5
-批次3 + 批次4 ──→ 批次6
+批次3 + 批次4 ──→ 批次6 ──→ 批次7
 ```

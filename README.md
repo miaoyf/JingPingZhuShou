@@ -15,8 +15,11 @@
 | --- | --- |
 | `QUERY_ALL_PACKAGES` | 列出已安装应用，供用户逐个开关 |
 | `BIND_ACCESSIBILITY_SERVICE` | 无障碍服务绑定（由系统授予） |
+| `FOREGROUND_SERVICE` | 后台保活服务，保证无障碍事件通道不被系统冻结 |
+| `FOREGROUND_SERVICE_SPECIAL_USE` | 保活服务的类型声明（Android 14+） |
+| `POST_NOTIFICATIONS` | 展示保活服务的常驻通知（Android 13+） |
 
-不声明 `INTERNET`，不做任何联网行为；不声明 `POST_NOTIFICATIONS` 等无关权限。
+不声明 `INTERNET`，不做任何联网行为。
 
 ---
 
@@ -35,24 +38,44 @@
 
 ```bash
 cd LiTiaotiaoClone
-./gradlew assembleDebug        # 调试包
-./gradlew assembleRelease      # 发布包（需自行配置签名）
-./gradlew lintDebug            # 静态检查
+./gradlew clean assembleDebug       # 调试包（可查看运行日志）
+./gradlew clean assembleRelease     # 发布包（使用 keystore.properties 中的签名）
+./gradlew lintDebug                 # 静态检查
 ```
 
 产物路径：
 
 ```
 app/build/outputs/apk/debug/app-debug.apk
-app/build/outputs/apk/release/app-release-unsigned.apk
+app/build/outputs/apk/release/app-release.apk
 ```
 
-工程根目录另附一份可直接安装的副本 `LiTiaotiaoClone-debug.apk`（Android Debug 签名，需允许「安装未知来源应用」）。
+发布包签名配置在工程根目录 `keystore.properties`（**该文件与 `.jks` 密钥不入库**）：
+
+```
+storeFile=lttclone-release.jks
+storePassword=<你的密码>
+keyAlias=lttclone
+keyPassword=<你的密码>
+```
+
+生成签名密钥：
+
+```bash
+keytool -genkeypair -keystore lttclone-release.jks -alias lttclone \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -dname "CN=LiTiaotiaoClone, O=LiTiaotiaoClone, C=CN"
+```
+
+工程根目录另附两份可直接安装的副本：
+
+- `LiTiaotiaoClone-debug.apk`（Android Debug 签名，可读取运行日志）
+- `LiTiaotiaoClone-release.apk`（自签名，不可调试、体积更小，正式使用推荐）
 
 安装到设备：
 
 ```bash
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
 若本机尚未安装 Android SDK，可用 Homebrew 一次装齐：
@@ -73,17 +96,40 @@ sdk.dir=/opt/homebrew/share/android-commandlinetools
 
 1. 安装并打开应用「李跳跳复刻」。
 2. 主界面顶部显示无障碍服务状态。**必须**点「无障碍服务」开关跳转到系统设置页，找到「李跳跳复刻服务」并真正开启（首次开启会有系统确认弹窗，要点「允许」）。只安装 APK 不开服务不会生效。
-3. 返回应用，状态应变为「服务已开启」。若仍显示未开启，说明系统设置里没有真正打开该服务。
-4. 主界面「通用开屏广告跳过」开关默认开启，用于跳过规则库未覆盖的应用的开屏广告；如担心误触可关闭。
-5. 进入应用内「应用设置」页，可对每个已安装应用单独开关：
+3. **开启服务后，请再回到本应用打开一次主界面**。荣耀 / 华为 / 小米等系统会冻结长时间未在后台运行的进程，未先打开一次时服务可能收不到事件。
+4. 返回应用，状态应变为「服务已开启」。若仍显示未开启，说明系统设置里没有真正打开该服务。
+5. 主界面「通用开屏广告跳过」开关默认开启，用于跳过规则库未覆盖的应用的开屏广告；如担心误触可关闭。
+6. 进入应用内「应用设置」页，可对每个已安装应用单独开关：
    - 开启 = 对该应用执行自动跳过
    - 关闭 = 忽略该应用
    - 点击应用名称可查看该应用命中的内置规则明细
-6. 回到桌面打开任意带开屏广告的应用，服务会自动匹配规则并点击「跳过」。
+7. 回到桌面打开任意带开屏广告的应用，服务会自动匹配规则并点击「跳过」。
 
 开关状态保存在 `SharedPreferences`（`ltt_prefs`），服务运行期间即时生效。
 
-排查提示：服务运行日志为 `adb logcat -s LttService`，可看到 `service connected` / `acted key=… method=…` / `generic skip` 等记录，用来确认服务是否真的在工作。
+### 后台保活（荣耀 / 华为必做）
+
+本应用在后台运行一个低优先级常驻通知（前台服务，`specialUse` 类型），用于避免系统冻结导致无障碍事件通道中断。
+
+若使用荣耀 / 华为 / 小米等深度管控系统，还需手动放行：
+
+> 设置 → 应用 → 应用启动管理 → 李跳跳复刻 → 允许「自启动」「后台活动」「关联启动」
+
+### 诊断信息
+
+主界面「诊断信息」按钮会展示：
+
+- 无障碍服务是否已开启
+- 设备是否把本应用设为「调试应用 + 等待调试器」（这会导致服务永远无法绑定）
+- 最近 120 行运行日志（服务事件、前台包名、扫描、点击、确认）
+
+也可在已连接 adb 的电脑上直接读取（debug 包）：
+
+```bash
+adb shell run-as com.example.lttclone cat files/ltt_diag.log
+```
+
+排查提示：部分国产 ROM 会屏蔽第三方应用的 logcat 输出，因此本应用把关键日志同时写入应用私有目录 `files/ltt_diag.log`，用上面的命令查看。日志中的关键行：`service connected` / `event type=… pkg=…` / `foreground package=…` / `scan pkg=… nodes=… rules=…` / `tap x=… y=… text=…` / `acted key=… method=…` / `action confirmed key=…`。
 
 ## 工作原理
 
@@ -92,7 +138,10 @@ AccessibilityEvent
    └─ LttService（无障碍服务）
         ├─ 前台包名开关判断（Prefs.isAppEnabled）
         ├─ 记录前台应用与「开屏窗口期」（切前台后 15 秒内）
+        ├─ 看门狗：每 2 秒复查一次，前台应用未变且窗口期未过则重新开启扫描会话
+        │    （应对广告按钮晚于首个事件才渲染的情况）
         └─ RuleMatcher 会话式扫描（每 250ms 一轮，最长 6 秒）
+             ├─ 节点按目标应用包名过滤（scopedNodes），避免误点自身界面
              ├─ 规则定位：id / action 各自按「关键字 & 关键字」OR 拆分
              │    └─ 候选节点打分择优：完全相等 100 > 前缀 80 > 包含 60，
              │       resource-id 后缀匹配额外加权，取最高分而非首个命中
@@ -103,8 +152,11 @@ AccessibilityEvent
              ├─ action = "back" / "GLOBAL_ACTION_BACK" 时执行返回键
              ├─ action = "x:123y:456" 时按坐标手势点击
              └─ 效果验证：点击 700ms 后回检目标是否还在，未生效则切换点击方式重试
-                 （规则按 id/action 定位回检，通用跳过按「跳过按钮是否仍存在」回检）
+                  （规则按 id/action 定位回检，通用跳过按「跳过按钮是否仍存在」回检）
+                  回检通过后才标记「已成功」，避免一次手势失效就永久关闭本次跳过
 ```
+
+后台保活：`KeepAliveService` 以 `specialUse` 类型前台服务常驻，通知渠道最低优先级不可点击。
 
 规则查找键为包名 `String.hashCode()` 的十进制字符串（与上游规则库一致）。
 
@@ -188,11 +240,14 @@ LiTiaotiaoClone/
 │       │   │   ├── RuleRepository.kt     # assets 解析与缓存
 │       │   │   └── Prefs.kt              # 总开关 / 按应用开关 / 通用跳过开关
 │       │   └── service/
-│       │       ├── LttService.kt         # 无障碍服务接入与前台窗口期管理
+│       │       ├── LttService.kt         # 无障碍服务接入、前台窗口期管理、看门狗、保活拉起
 │       │       ├── RuleMatcher.kt        # 会话式匹配与点击引擎
 │       │       ├── NodeMatcher.kt        # 节点定位：OR 拆分、打分择优、bounds/坐标解析
-│       │       └── SplashSkipper.kt      # 通用开屏广告按钮启发式识别
+│       │       ├── SplashSkipper.kt      # 通用开屏广告按钮启发式识别
+│       │       ├── KeepAliveService.kt   # 后台保活前台服务（specialUse）
+│       │       └── Diag.kt               # 运行日志：logcat + files/ltt_diag.log 双通道
 │       └── res/
+│           ├── drawable/ic_stat_keepalive.xml  # 保活通知小图标
 │           ├── layout/                   # activity_main / activity_app_setting / item_app_info
 │           ├── values/                   # strings.xml、themes.xml
 │           ├── xml/accessibility_service_config.xml
@@ -206,6 +261,7 @@ LiTiaotiaoClone/
 ├── settings.gradle.kts
 ├── gradle.properties
 ├── gradlew / gradlew.bat                 # Gradle wrapper
+├── keystore.properties                   # 发布签名配置（不入库）
 └── gradle/wrapper/                       # wrapper JAR 与发行版配置
 ```
 
@@ -246,6 +302,26 @@ LiTiaotiaoClone/
 | `action="back"` | 通过（弹窗被关闭并回到桌面） |
 | 按应用开关生效 | 通过（关闭后不再点击） |
 | 崩溃检查 | 无 FATAL / AndroidRuntime 异常 |
+
+真机验证（荣耀 PNM-AN10 / Android 16 / API 36，真实开屏广告应用）：
+
+| 验证项 | 结果 |
+| --- | --- |
+| 无障碍服务绑定 | 通过（`Bound services` 含李跳跳复刻服务，`TYPES_ALL_MASK`） |
+| 通用开屏跳过（拼多多真实广告页） | 通过（日志 `tap x=987 y=213 text=跳过` → `acted key=__ltt_generic_skip__` → `action confirmed`，随后页面不再存在「跳过」节点，焦点落在 `HomeActivity`） |
+| 纯手势点击有效性（隔离掉库内 `GLOBAL_ACTION_BACK` 规则） | 通过（仅手势即完成跳过，未依赖返回键兜底） |
+| 规则命中（库内规则） | 通过（拼多多命中 7 条规则） |
+| 诊断日志通道 | 通过（`files/ltt_diag.log` 可读；该 ROM 屏蔽第三方 logcat） |
+| 后台保活前台服务 | 通过（`ServiceRecord … KeepAliveService isForeground=true types=0x40000000`） |
+| release 包签名与安装 | 通过（自签名证书校验通过，无 `debuggable` 标记） |
+
+真机排障要点（已全部验证并写入诊断信息页）：
+
+1. 手机必须开启「开发者选项 → USB 调试 / 无线调试」，否则无法抓日志。
+2. **必须先打开一次本应用主界面**，否则进程会被系统冻结，无障碍服务收不到事件。
+3. 设备若把应用设为「调试应用 + 等待调试器」，服务永远无法绑定（需在开发者选项取消）。
+4. 荣耀 / 华为需在「设置 → 应用 → 应用启动管理」放行自启动与后台活动。
+5. 屏幕必须点亮，未点亮时开屏广告不会渲染，也就无从跳过。
 
 > 验证过程中的两个环境坑（真机/模拟器通用）：
 > 重装 APK 会清掉无障碍服务绑定，需要重新执行

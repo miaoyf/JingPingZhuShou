@@ -8,5 +8,6 @@ captures/
 .externalNativeBuild/
 .cxx/
 *.apk
-captures/
-.idea/
+keystore.properties
+*.jks
+*.keystore

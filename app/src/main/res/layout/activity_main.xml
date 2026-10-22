@@ -73,11 +73,25 @@
         app:layout_constraintTop_toBottomOf="@id/switch_generic" />
 
     <Button
+        android:id="@+id/btn_diag"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/main_diag_button"
+        app:layout_constraintBottom_toTopOf="@id/btn_app_settings"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tv_info"
+        app:layout_constraintVertical_bias="1.0" />
+
+    <Button
         android:id="@+id/btn_app_settings"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
         android:text="@string/main_app_settings"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btn_diag" />
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -18,9 +18,22 @@
     <string name="guide_message">1. 点击下方「去开启」按钮\n2. 在系统设置中找到「李跳跳复刻服务」并打开\n3. 返回本应用即可看到「服务已开启」\n\n提示：华为、小米等机型可能需要先在「设置 → 关于手机」连点版本号开启开发者选项。</string>
     <string name="guide_confirm">去开启</string>
     <string name="main_app_settings">应用设置</string>
+    <string name="main_diag_button">诊断信息</string>
+    <string name="diag_title">诊断信息</string>
+    <string name="diag_copy">复制</string>
+    <string name="diag_copied">已复制到剪贴板</string>
+    <string name="diag_empty">暂无运行日志。请确认无障碍服务已开启，然后打开一次带开屏广告的应用，再回到本页面查看。</string>
+    <string name="diag_service_state">无障碍服务：%1$s</string>
+    <string name="diag_debug_app">设备调试应用：%1$s</string>
+    <string name="diag_none">无</string>
+    <string name="diag_wait_no">等待调试器：否</string>
+    <string name="diag_wait_yes">等待调试器：是（设备已把本应用设为调试应用并等待调试器，这会导致无障碍服务无法绑定，请在开发者选项中取消该设置）</string>
     <string name="app_setting_title">应用设置</string>
     <string name="app_setting_subtitle">对单个应用开启或关闭自动跳过</string>
     <string name="app_setting_rules_title">%1$s 的内置规则</string>
     <string name="app_setting_rule_line">%1$s / %2$s（%3$d 次）</string>
     <string name="app_setting_rules_empty">该应用暂无内置规则</string>
+    <string name="keepalive_channel">后台保活</string>
+    <string name="keepalive_title">李跳跳复刻正在运行</string>
+    <string name="keepalive_text">保持无障碍服务在后台正常工作</string>
 </resources>

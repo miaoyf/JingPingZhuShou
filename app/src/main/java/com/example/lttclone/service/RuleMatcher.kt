@@ -6,7 +6,6 @@ import android.graphics.Path
 import android.graphics.Point
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 import com.example.lttclone.data.AppRules
 import com.example.lttclone.data.Rule
@@ -18,6 +17,8 @@ class RuleMatcher(
 ) {
 
     var onGenericAction: (() -> Unit)? = null
+    var onAction: ((String) -> Unit)? = null
+    var onVerified: ((String) -> Unit)? = null
 
     private class Session(val generation: Int, val packageName: String) {
         val acted = HashSet<String>()
@@ -34,6 +35,7 @@ class RuleMatcher(
     private val handler = Handler(Looper.getMainLooper())
     private var running = false
     private var pendingPackage: String? = null
+    private var lastTextLogPackage: String? = null
     private var generation = 0
 
     fun handle(packageName: String) {
@@ -57,10 +59,16 @@ class RuleMatcher(
         var ruleActed = false
         val root = runCatching { service.rootInActiveWindow }.getOrNull()
         if (root != null) {
-            val nodes = NodeMatcher.collectNodes(root)
+            val nodes = scopedNodes(root, session.packageName)
             val rules = rulesProvider(session.packageName)
             if (session.rounds == 1) {
-                Log.i(TAG, "scan pkg=${session.packageName} nodes=${nodes.size} rules=${rules?.popupRules?.size ?: -1}")
+                Diag.log("scan pkg=${session.packageName} nodes=${nodes.size} rules=${rules?.popupRules?.size ?: -1}")
+                if (lastTextLogPackage != session.packageName) {
+                    lastTextLogPackage = session.packageName
+                    Diag.log("texts=" + nodes.take(24).joinToString("|") {
+                        NodeMatcher.textOf(it).replace('\u0000', '|').take(16)
+                    })
+                }
             }
             if (rules != null) {
                 for (rule in rules.popupRules) {
@@ -75,7 +83,7 @@ class RuleMatcher(
                     }
                 }
             }
-            if (!ruleActed && genericProvider() && !session.genericActed) {
+            if (!ruleActed && genericProvider() && !session.genericActed && !isSystemPackage(session.packageName)) {
                 val metrics = service.resources.displayMetrics
                 val candidate = SplashSkipper.findCandidate(
                     nodes,
@@ -132,9 +140,12 @@ class RuleMatcher(
                 NodeMatcher.boundsKey(node)?.let { boundsTarget.add(it) }
             }
             if (verifyCheck != null) session.checks[key] = verifyCheck
-            Log.i(TAG, "acted key=$key method=$method attempt=$attempt")
+            Diag.log("acted key=$key method=$method attempt=$attempt")
+            onAction?.invoke(key)
             if (verifiable(rule)) {
                 handler.postDelayed({ verify(session, rule, key) }, VERIFY_DELAY)
+            } else {
+                onVerified?.invoke(key)
             }
             return true
         }
@@ -142,7 +153,7 @@ class RuleMatcher(
         handler.postDelayed({
             if (session.generation != generation) return@postDelayed
             val root = runCatching { service.rootInActiveWindow }.getOrNull() ?: return@postDelayed
-            val nodes = NodeMatcher.collectNodes(root)
+            val nodes = scopedNodes(root, session.packageName)
             dispatch(session, rule, locate(nodes, rule.id), locate(nodes, rule.action), attempt + 1, verifyCheck, boundsTarget)
         }, RETRY_INTERVAL)
         return false
@@ -151,21 +162,24 @@ class RuleMatcher(
     private fun verify(session: Session, rule: Rule, key: String) {
         if (session.generation != generation) return
         val root = runCatching { service.rootInActiveWindow }.getOrNull() ?: return
-        val nodes = NodeMatcher.collectNodes(root)
+        val nodes = scopedNodes(root, session.packageName)
         val check = session.checks[key]
         val stillThere = if (check != null) {
             runCatching { check(nodes) }.getOrDefault(false)
         } else {
             locate(nodes, rule.id) ?: locate(nodes, rule.action) != null
         }
-        if (!stillThere) return
+        if (!stillThere) {
+            onVerified?.invoke(key)
+            return
+        }
         val switches = session.switches[key] ?: 0
         if (switches >= MAX_SWITCHES) return
         session.switches[key] = switches + 1
         session.methods[key] = if ((session.methods[key] ?: METHOD_TAP) == METHOD_TAP) METHOD_CLICK else METHOD_TAP
         session.acted.remove(key)
         if (key.startsWith(GENERIC_ID)) session.genericActed = false
-        Log.i(TAG, "verify retry key=$key method=${session.methods[key]}")
+        Diag.log("verify retry key=$key method=${session.methods[key]}")
     }
 
     private fun perform(
@@ -247,7 +261,7 @@ class RuleMatcher(
     private fun tap(node: AccessibilityNodeInfo): Boolean {
         val bounds = NodeMatcher.boundsOf(node) ?: return false
         val point = Point(bounds.exactCenterX().toInt(), bounds.exactCenterY().toInt())
-        Log.i(TAG, "tap x=${point.x} y=${point.y} text=${NodeMatcher.textOf(node).replace('\u0000', '|')}")
+        Diag.log("tap x=${point.x} y=${point.y} text=${NodeMatcher.textOf(node).replace('\u0000', '|')}")
         return tapPoint(point)
     }
 
@@ -261,10 +275,24 @@ class RuleMatcher(
         return runCatching { service.dispatchGesture(gesture, null, null) }.getOrDefault(false)
     }
 
+    private fun scopedNodes(root: AccessibilityNodeInfo, targetPackage: String): List<AccessibilityNodeInfo> {
+        val own = service.packageName
+        if (targetPackage.isBlank() || targetPackage == own) return emptyList()
+        return NodeMatcher.collectNodes(root).filter { it.packageName == targetPackage }
+    }
+
+    private fun isSystemPackage(packageName: String): Boolean {
+        if (packageName == service.packageName) return true
+        if (packageName == "android") return true
+        if (packageName == "com.android.systemui") return true
+        if (packageName.endsWith(".systemui")) return true
+        if (packageName.contains(".launcher")) return true
+        return false
+    }
+
     private fun ruleKey(rule: Rule): String = rule.id + "\u0001" + rule.action
 
     companion object {
-        private const val TAG = "LttService"
         private const val MAX_ROUNDS = 24
         private const val MAX_IDLE_ROUNDS = 8
         private const val SCAN_INTERVAL = 250L
@@ -275,7 +303,7 @@ class RuleMatcher(
         private const val TAP_RADIUS = 1.5f
         private const val BACK = "back"
         private const val GLOBAL_BACK = "GLOBAL_ACTION_BACK"
-        private const val GENERIC_ID = "__ltt_generic_skip__"
+        const val GENERIC_ID = "__ltt_generic_skip__"
         private const val GENERIC_TIMES = 3
         private const val METHOD_TAP = 0
         private const val METHOD_CLICK = 1

@@ -151,6 +151,10 @@ data class AppRules(
    - 与规则互斥：同一会话内规则已点过的坐标会进入排除集，通用跳过不会再点同一位置，避免重复点击。
 6. **规则来源合并**：`LttService.resolveRules` 同时取「事件来源包」与「前台包」两份规则并合并，标量参数以事件包优先。用于开屏广告由独立广告 SDK 进程/包渲染、事件包名不是目标应用的情况。
 7. **高级参数**：`times`（失败重试，间隔 200ms）、`delayPopup`（命中后延迟执行）、`clickWayPopup`（强制手势点击）、`searchTimesPopup`（未命中时的重扫轮数）。
+8. **节点按包过滤**：所有取节点的入口统一经过 `scopedNodes(root, targetPackage)`，只保留目标应用包名的节点。避免 `rootInActiveWindow` 返回其它窗口（如本应用自身界面）时被通用跳过误点。
+9. **看门狗与会话重开**：`LttService` 每 2 秒复查一次——前台包名未变、距切前台未超过 15s 窗口期、且本轮尚未成功动作时，重新调用 `matcher.handle(foregroundPackage)` 开启新会话。用于覆盖「广告按钮晚于首个事件数秒才渲染」的情况。
+10. **成功确认语义**：`genericFired` / `actedFlag` 仅在动作**回检通过**后才置位，避免首次手势未生效就把整次通用跳过关闭。
+11. **后台保活**：`KeepAliveService` 以 `specialUse` 类型启动前台服务并常驻最低优先级通知，抵抗系统对后台应用进程的冻结；`LttService.onServiceConnected` 与 `MainActivity` 均会拉起它。
 
 ## 6. 组件设计
 
@@ -159,10 +163,12 @@ data class AppRules(
 | `App` | Application，初始化 Prefs / Repository |
 | `MainActivity` | 无障碍服务状态、通用跳过开关、规则库统计、未开启时弹出引导、`SwitchMaterial` |
 | `AppSettingActivity` | 按应用开关列表（RecyclerView）+ 规则明细弹窗 |
-| `service/LttService` | 无障碍服务；事件入口；前台包名与「开屏窗口期」管理；`Log.i` 关键日志 |
+| `service/LttService` | 无障碍服务；事件入口；前台包名与「开屏窗口期」管理；看门狗重开会话；保活服务拉起；关键日志 |
 | `service/RuleMatcher` | 会话式调度、动作派发、效果验证与点击方式切换 |
 | `service/NodeMatcher` | 节点定位：OR 拆分、打分择优、bounds / 坐标解析、节点树遍历 |
 | `service/SplashSkipper` | 通用开屏广告按钮启发式识别 |
+| `service/KeepAliveService` | 后台保活前台服务（`specialUse`，最低优先级常驻通知） |
+| `service/Diag` | 运行日志双通道：`Log.i` + 应用私有目录 `files/ltt_diag.log`（兼容屏蔽第三方 logcat 的 ROM） |
 | `data/Rule` | 数据类 |
 | `data/RuleRepository` | 加载 assets/rules.json + 缓存 |
 | `data/Prefs` | SharedPreferences 封装（总开关、按应用开关、通用跳过开关） |
@@ -173,13 +179,14 @@ data class AppRules(
 - 单条规则异常：跳过该条，计数，不影响其他。
 - 节点遍历异常：捕获 `IllegalStateException`（节点已失效），跳过。
 - 手势/点击失败：静默降级，按 `times` 重试；点击后回检仍未生效则切换点击方式重试。
-- 日志：TAG 统一为 `LttService`，关键节点用 `Log.i`（`service connected` / `foreground package=…` / `scan pkg=… nodes=… rules=…` / `tap x=… y=… text=…` / `acted key=… method=… attempt=…` / `verify retry key=… method=…`），便于真机 `adb logcat -s LttService` 排查；不落盘、不上传。
+- 日志：TAG 统一为 `LttService`，关键节点用 `Log.i`（`service connected` / `foreground package=…` / `scan pkg=… nodes=… rules=…` / `tap x=… y=… text=…` / `acted key=… method=… attempt=…` / `verify retry key=… method=…` / `action confirmed key=…`），便于真机 `adb logcat -s LttService` 排查；不落盘、不上传。
+- 日志落盘：部分国产 ROM 会屏蔽第三方应用的 logcat，因此所有服务日志同时经 `Diag.log` 写入应用私有目录 `files/ltt_diag.log`（512KB 上限，保留尾部），主界面「诊断信息」按钮可查看并复制，debug 包可用 `adb shell run-as com.example.lttclone cat files/ltt_diag.log` 读取。日志仅含包名、控件文本与坐标，不含用户数据，也不上传。
 - 不使用崩溃上报 SDK。
 
 ## 8. 安全设计
 
 - **无网络**：Manifest 不声明 `INTERNET`/`ACCESS_NETWORK_STATE`。
-- **最小权限**：仅 `QUERY_ALL_PACKAGES`、`BIND_ACCESSIBILITY_SERVICE`。
+- **最小权限**：仅 `QUERY_ALL_PACKAGES`、`BIND_ACCESSIBILITY_SERVICE`、`FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_SPECIAL_USE`、`POST_NOTIFICATIONS`。
 - **数据本地化**：所有状态存 SharedPreferences，不外发。
 - **无障碍范围**：仅读取窗口内容用于定位，不采集文本内容归档。
 - **导出规则**：`allowBackup=false`（复刻版收紧，减少数据外泄面）。
@@ -191,4 +198,6 @@ data class AppRules(
 - 需自备 Android SDK（`local.properties` 或 `ANDROID_HOME`）：Platform 34 + Build-Tools 34.0.0。
 - 规则文件随 APK 打包（`app/src/main/assets/rules.json`）。
 - 分发须遵守 AGPL-3.0（规则库许可）。
-- 已验证：`./gradlew assembleDebug` 构建成功，`./gradlew lintDebug` 0 errors / 0 warnings。
+- 已验证：`./gradlew clean assembleDebug assembleRelease lintDebug` 构建成功，`./gradlew lintDebug` 0 errors / 0 warnings。
+- 发布包签名：根目录 `keystore.properties`（`storeFile` / `storePassword` / `keyAlias` / `keyPassword`）配置 `signingConfigs.release`，该文件与 `*.jks` 均不纳入版本库。
+- 真机验证：荣耀 PNM-AN10 / Android 16 / API 36 上完成真实开屏广告（拼多多）的点击跳过闭环。
