@@ -29,7 +29,7 @@ object SplashSkipper {
             val match = score(node) ?: continue
             val bounds = NodeMatcher.boundsOf(node) ?: continue
             if (excluded.contains(NodeMatcher.boundsKey(bounds))) continue
-            if (!acceptable(bounds, screenWidth, screenHeight, match.clickable)) continue
+            if (!acceptable(bounds, screenWidth, screenHeight, match.clickable, match.strict)) continue
             val total = match.score + if (match.clickable) 25 else 0
             if (total > bestScore) {
                 bestScore = total
@@ -73,12 +73,14 @@ object SplashSkipper {
         bounds: Rect,
         screenWidth: Int,
         screenHeight: Int,
-        clickable: Boolean
+        clickable: Boolean,
+        strict: Boolean
     ): Boolean {
         val area = bounds.width().toLong() * bounds.height().toLong()
         val screenArea = screenWidth.toLong() * screenHeight.toLong()
         if (screenArea > 0 && area * 4 > screenArea) return false
         if (clickable) return true
+        if (strict) return true
         return bounds.bottom * 2 <= screenHeight
     }
 }

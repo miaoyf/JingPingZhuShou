@@ -63,10 +63,17 @@ class RuleMatcher(
             val rules = rulesProvider(session.packageName)
             if (session.rounds == 1) {
                 Diag.log("scan pkg=${session.packageName} nodes=${nodes.size} rules=${rules?.popupRules?.size ?: -1}")
+                Diag.log("windows=" + runCatching {
+                    service.windows.joinToString(",") { w ->
+                        val root = runCatching { w.root }.getOrNull()
+                        (w.id.toString() + ":" + w.type.toString() + ":" +
+                            (root?.packageName?.toString() ?: "null") + ":" + w.isActive)
+                    }
+                }.getOrDefault("?"))
                 if (lastTextLogPackage != session.packageName) {
                     lastTextLogPackage = session.packageName
-                    Diag.log("texts=" + nodes.take(24).joinToString("|") {
-                        NodeMatcher.textOf(it).replace('\u0000', '|').take(16)
+                    Diag.log("texts=" + nodes.take(150).joinToString("|") {
+                        NodeMatcher.textOf(it).replace('\u0000', '|').take(10)
                     })
                 }
             }
@@ -275,10 +282,24 @@ class RuleMatcher(
         return runCatching { service.dispatchGesture(gesture, null, null) }.getOrDefault(false)
     }
 
-    private fun scopedNodes(root: AccessibilityNodeInfo, targetPackage: String): List<AccessibilityNodeInfo> {
+    private fun scopedNodes(root: AccessibilityNodeInfo?, targetPackage: String): List<AccessibilityNodeInfo> {
         val own = service.packageName
         if (targetPackage.isBlank() || targetPackage == own) return emptyList()
-        return NodeMatcher.collectNodes(root).filter { it.packageName == targetPackage }
+        val roots = ArrayList<AccessibilityNodeInfo>(8)
+        runCatching { service.windows }.getOrNull()?.forEach { window ->
+            runCatching { window.root }.getOrNull()?.let { roots.add(it) }
+        }
+        if (root != null) roots.add(root)
+        val collected = ArrayList<AccessibilityNodeInfo>(256)
+        for (item in roots) {
+            for (node in NodeMatcher.collectNodes(item)) {
+                if (!collected.contains(node)) collected.add(node)
+            }
+        }
+        return collected.filter { node ->
+            val pkg = runCatching { node.packageName?.toString() }.getOrNull() ?: return@filter false
+            pkg != own && !isSystemPackage(pkg)
+        }
     }
 
     private fun isSystemPackage(packageName: String): Boolean {
