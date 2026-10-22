@@ -14,6 +14,8 @@ object SplashSkipper {
 
     private val LOOSE = listOf("跳过", "skip", "关闭广告")
 
+    private val FAST_KEYWORDS = listOf("跳过", "skip", "关闭广告")
+
     private const val MAX_STRICT_LENGTH = 8
 
     private const val MAX_NODES = 3000
@@ -21,8 +23,41 @@ object SplashSkipper {
     class ScanResult(
         val candidate: AccessibilityNodeInfo?,
         val texts: List<String>,
-        val visited: Int
+        val visited: Int,
+        val strict: Boolean = false
     )
+
+    fun scanRootsFast(
+        roots: List<AccessibilityNodeInfo>,
+        screenWidth: Int,
+        screenHeight: Int,
+        excluded: Set<String> = emptySet()
+    ): ScanResult {
+        var bestNode: AccessibilityNodeInfo? = null
+        var bestScore = 0
+        var bestStrict = false
+        var visited = 0
+        for (item in roots) {
+            for (keyword in FAST_KEYWORDS) {
+                val found = runCatching { item.findAccessibilityNodeInfosByText(keyword) }.getOrNull() ?: continue
+                for (node in found) {
+                    visited++
+                    val match = score(node) ?: continue
+                    val bounds = NodeMatcher.boundsOf(node) ?: continue
+                    if (excluded.contains(NodeMatcher.boundsKey(bounds))) continue
+                    if (!acceptable(bounds, screenWidth, screenHeight, match.clickable, match.strict)) continue
+                    val total = match.score + if (match.clickable) 25 else 0
+                    if (total > bestScore) {
+                        bestScore = total
+                        bestNode = node
+                        bestStrict = match.strict
+                    }
+                    if (match.strict) return ScanResult(bestNode, emptyList(), visited, true)
+                }
+            }
+        }
+        return ScanResult(bestNode, emptyList(), visited, bestStrict)
+    }
 
     fun scanRoots(
         roots: List<AccessibilityNodeInfo>,
@@ -33,6 +68,7 @@ object SplashSkipper {
     ): ScanResult {
         var bestNode: AccessibilityNodeInfo? = null
         var bestScore = 0
+        var bestStrict = false
         var visited = 0
         val texts = ArrayList<String>(160)
         for (item in roots) {
@@ -59,8 +95,9 @@ object SplashSkipper {
                         if (total > bestScore) {
                             bestScore = total
                             bestNode = node
+                            bestStrict = match.strict
                         }
-                        if (match.strict) return ScanResult(bestNode, texts, visited)
+                        if (match.strict) return ScanResult(bestNode, texts, visited, true)
                     }
                 }
                 val childCount = runCatching { node.childCount }.getOrNull() ?: 0
@@ -70,7 +107,7 @@ object SplashSkipper {
                 }
             }
         }
-        return ScanResult(bestNode, texts, visited)
+        return ScanResult(bestNode, texts, visited, bestStrict)
     }
 
     fun findCandidate(

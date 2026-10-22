@@ -70,7 +70,27 @@ class RuleMatcher(
         val metrics = service.resources.displayMetrics
         val genericOn = !session.genericActed && genericProvider() && !isSystemPackage(session.packageName)
         var genericResult: SplashSkipper.ScanResult? = null
-        if (roots.isNotEmpty() && (genericOn || session.rounds % RULE_SCAN_EVERY == 1)) {
+        val needFull = session.rounds % RULE_SCAN_EVERY == 1
+        if (roots.isNotEmpty() && genericOn) {
+            val fast = SplashSkipper.scanRootsFast(
+                roots,
+                metrics.widthPixels,
+                metrics.heightPixels,
+                session.ruleBounds
+            )
+            genericResult = fast
+            if (fast.candidate == null || (!fast.strict && needFull)) {
+                val full = SplashSkipper.scanRoots(
+                    roots,
+                    metrics.widthPixels,
+                    metrics.heightPixels,
+                    session.ruleBounds,
+                    session.rounds == 1
+                )
+                if (full.candidate != null || fast.candidate == null) genericResult = full
+                else if (full.texts.isNotEmpty()) genericResult = full
+            }
+        } else if (roots.isNotEmpty() && needFull) {
             genericResult = SplashSkipper.scanRoots(
                 roots,
                 metrics.widthPixels,
@@ -78,19 +98,20 @@ class RuleMatcher(
                 session.ruleBounds,
                 session.rounds == 1
             )
-            if (session.rounds == 1) {
-                Diag.log("scan pkg=${session.packageName} nodes=${genericResult.visited} rules=${rules?.popupRules?.size ?: -1}")
-                Diag.log("windows=" + runCatching {
-                    service.windows.joinToString(",") { w ->
-                        val windowRoot = runCatching { w.root }.getOrNull()
-                        (w.id.toString() + ":" + w.type.toString() + ":" +
-                            (windowRoot?.packageName?.toString() ?: "null") + ":" + w.isActive)
-                    }
-                }.getOrDefault("?"))
-                if (lastTextLogPackage != session.packageName) {
-                    lastTextLogPackage = session.packageName
-                    Diag.log("texts=" + genericResult.texts.joinToString("|"))
+        }
+        if (session.rounds == 1) {
+            Diag.log("scan pkg=${session.packageName} nodes=${genericResult?.visited ?: 0} rules=${rules?.popupRules?.size ?: -1}")
+            Diag.log("windows=" + runCatching {
+                service.windows.joinToString(",") { w ->
+                    val windowRoot = runCatching { w.root }.getOrNull()
+                    (w.id.toString() + ":" + w.type.toString() + ":" +
+                        (windowRoot?.packageName?.toString() ?: "null") + ":" + w.isActive)
                 }
+            }.getOrDefault("?"))
+            val collected = genericResult?.texts ?: emptyList()
+            if (collected.isNotEmpty() && lastTextLogPackage != session.packageName) {
+                lastTextLogPackage = session.packageName
+                Diag.log("texts=" + collected.joinToString("|"))
             }
         }
         if (genericOn && genericResult != null) {
@@ -155,7 +176,7 @@ class RuleMatcher(
     ): Boolean {
         if (session.generation != generation) return false
         val key = ruleKey(rule)
-        val method = session.methods[key] ?: METHOD_TAP
+        val method = session.methods[key] ?: METHOD_CLICK
         val done = perform(rule, idNode, actionNode, method)
         if (done) {
             session.acted.add(key)
@@ -163,7 +184,7 @@ class RuleMatcher(
                 NodeMatcher.boundsKey(node)?.let { boundsTarget.add(it) }
             }
             if (verifyCheck != null) session.checks[key] = verifyCheck
-            Diag.log("acted key=$key method=$method attempt=$attempt")
+            Diag.log("acted key=$key method=$method attempt=$attempt after=${SystemClock.elapsedRealtime() - session.startAt}ms")
             onAction?.invoke(key)
             if (verifiable(rule)) {
                 handler.postDelayed({ verify(session, rule, key) }, VERIFY_DELAY)
@@ -197,7 +218,7 @@ class RuleMatcher(
         val switches = session.switches[key] ?: 0
         if (switches >= MAX_SWITCHES) return
         session.switches[key] = switches + 1
-        session.methods[key] = if ((session.methods[key] ?: METHOD_TAP) == METHOD_TAP) METHOD_CLICK else METHOD_TAP
+        session.methods[key] = if ((session.methods[key] ?: METHOD_CLICK) == METHOD_CLICK) METHOD_TAP else METHOD_CLICK
         session.acted.remove(key)
         if (key.startsWith(GENERIC_ID)) session.genericActed = false
         Diag.log("verify retry key=$key method=${session.methods[key]}")
@@ -356,13 +377,13 @@ class RuleMatcher(
         private const val SESSION_MAX_MS = 15000L
         private const val FAST_ROUNDS = 60
         private const val MID_ROUNDS = 120
-        private const val FAST_INTERVAL = 50L
+        private const val FAST_INTERVAL = 30L
         private const val MID_INTERVAL = 150L
         private const val SLOW_INTERVAL = 300L
         private const val RULE_SCAN_EVERY = 4
         private const val RETRY_INTERVAL = 120L
         private const val RESUME_DELAY = 60L
-        private const val VERIFY_DELAY = 700L
+        private const val VERIFY_DELAY = 250L
         private const val TAP_DURATION = 50L
         private const val TAP_RADIUS = 1.5f
         private const val BACK = "back"
