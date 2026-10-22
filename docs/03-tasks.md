@@ -3,7 +3,7 @@
 - 版本：v1.0
 - 日期：2026-10-20
 - 依据：`docs/02-design.md`
-- 粒度：9 个批次（每个批次为一次改动后端到端可验证的能力切片）
+- 粒度：10 个批次（每个批次为一次改动后端到端可验证的能力切片）
 
 ## 批次总览
 
@@ -40,6 +40,7 @@
 
 - [x] 批次8：逐应用实测与跨窗口/广告 SDK 节点检索增强（详见下方「批次8」小节）
 - [x] 批次9：跳过延迟优化与运行稳定性收敛（详见下方「批次9」小节）
+- [x] 批次10：诊断日志写盘性能优化与 65 应用全量冷启动验证（详见下方「批次10」小节）
 
 ## 批次6：真机失效排查与匹配引擎增强
 
@@ -119,7 +120,7 @@
 批次1 → 批次2 → 批次3 → 批次4
                    ↘      ↓
                      批次5
-批次3 + 批次4 ──→ 批次6 ──→ 批次7 ──→ 批次8 ──→ 批次9
+批次3 + 批次4 ──→ 批次6 ──→ 批次7 ──→ 批次8 ──→ 批次9 ──→ 批次10
 ```
 
 ### 批次9：跳过延迟优化与运行稳定性收敛
@@ -137,3 +138,17 @@
 - 完成情况：微博国际版 16ms、腾讯视频 452ms、央视频 893ms、拼多多 336ms（旧实现普遍约 2 秒）；`clean assembleDebug assembleRelease lintDebug` 通过、lint 零告警；release 包已在真机安装并绑定服务。
 - 验证前提（写进 README）：测开屏跳过前必须先结束目标应用进程（`am force-stop` 并确认 `pidof` 为空），否则是热启动、不走开屏广告流程；且冷启动不一定下发广告，控件树里没有「跳过」节点即表示本轮未下发广告，不能据此判定跳不过。
 - 遗留风险：荣耀 / 华为「应用启动管理 → 自动管理」开启时会冻结进程并反复重绑无障碍服务，必须由用户关闭「自动管理」并放行自启动 / 后台活动；SurfaceView 全自绘开屏属原理性限制。
+
+### 批次10：诊断日志写盘性能优化与 65 应用全量冷启动验证
+
+- 背景：用户要求「所有的跳过时间能不能控制在 500 毫秒以内」「尽量压缩到 1 秒以内」「所有应用全部冷启动验证一遍」。
+- 涉及文件：`app/src/main/java/com/example/lttclone/service/Diag.kt`、`app/src/main/java/com/example/lttclone/service/LttService.kt`、`app/src/main/java/com/example/lttclone/service/RuleMatcher.kt`、`README.md`、`docs/02-design.md`、`docs/03-tasks.md`
+- 根因与修复：
+  1. **诊断日志拖慢事件处理**：`Diag.log()` 每次调用执行 4 次文件 I/O（`length` / `readBytes` / `writeBytes` / `appendText`），而 `onAccessibilityEvent` 对每一个无障碍事件都写一行，事件风暴时产生大量同步文件写，直接拖慢事件投递与扫描。改为常驻 `BufferedWriter`（4KB 缓冲，写后 flush），文件大小检查降为每 64 次写一次。
+  2. **事件日志刷屏**：无障碍事件逐条落盘（实测单轮 1893 行），日志文件很快被冲掉。改为只记录 `TYPE_WINDOW_STATE_CHANGED`（`window changed pkg=…`）。
+  3. **快速定位控件**：逐节点 `getChild` 遍历整棵控件树需数百次 IPC（B站单轮首帧 1655ms）。新增 `SplashSkipper.scanRootsFast()`，用 `AccessibilityNodeInfo.findAccessibilityNodeInfosByText` 按「跳过 / skip / 关闭广告」直接取候选节点；无命中时才回退整树遍历。
+  4. **点击方式与回检**：默认改为先走节点 `ACTION_CLICK`（→ 可点击祖先 → 最后才手势），回检间隔由 700ms 缩短到 250ms，轮询间隔由 50ms 降到 30ms；`acted` 日志新增 `after=<会话开始至今>ms`，用于量化本服务自身耗时。
+- 验收标准：全量冷启动中凡是下发了开屏广告的应用均成功跳过，且本服务自身「发现 → 点击」耗时在 1 秒内；`clean assembleDebug assembleRelease lintDebug` 通过且 lint 零告警。
+- 完成情况：真机对 65 个第三方应用逐个「先结束进程 → 冷启动」验证，全部跑完——10 个应用下发了开屏广告并全部成功跳过（自身耗时 71~351ms），55 个应用本轮未下发开屏广告（控件树 8 秒内无任何跳过节点，非匹配失败）；`clean assembleDebug assembleRelease lintDebug` 通过、lint 零告警。
+- 验证口径说明：`after` = 本服务「会话开始 → 完成点击」自身耗时（开屏场景 71~351ms）；`TOTAL` = 从应用被拉起到完成点击，含应用自身冷启动与广告渲染（349~1043ms，不受本服务控制）。
+- 遗留风险：端到端延迟下限由应用自身冷启动决定，无法进一步压缩；SurfaceView 全自绘开屏属原理性限制。

@@ -293,11 +293,16 @@ class RuleMatcher(
         val self = runCatching {
             node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         }.getOrDefault(false)
-        if (self) return true
+        if (self) {
+            Diag.log("click node text=${NodeMatcher.textOf(node).replace('\u0000', '|')}")
+            return true
+        }
         val ancestor = NodeMatcher.clickableAncestor(node) ?: return false
-        return runCatching {
+        val hit = runCatching {
             ancestor.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         }.getOrDefault(false)
+        if (hit) Diag.log("click ancestor text=${NodeMatcher.textOf(ancestor).replace('\u0000', '|')}")
+        return hit
     }
 
     private fun tap(node: AccessibilityNodeInfo): Boolean {

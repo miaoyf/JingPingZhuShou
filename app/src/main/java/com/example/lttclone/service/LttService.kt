@@ -56,7 +56,9 @@ class LttService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val pkg = event?.packageName?.toString() ?: return
-        Diag.log("event type=${event.eventType} pkg=$pkg")
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            Diag.log("window changed pkg=$pkg")
+        }
         if (pkg == packageName) return
         if (!Prefs.isEnabled(this)) {
             Diag.log("skip: global switch off")
