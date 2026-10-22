@@ -67,8 +67,12 @@ class LttService : AccessibilityService() {
             return
         }
         val now = SystemClock.elapsedRealtime()
+        if (isSystemPackage(pkg)) return
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             updateForeground(pkg, now)
+            latestPackage = pkg
+            matcher?.handle(pkg)
+            return
         }
         latestPackage = pkg
         if (pending != null) return
@@ -152,9 +156,22 @@ class LttService : AccessibilityService() {
         pending = null
     }
 
+    private fun isSystemPackage(pkg: String): Boolean {
+        if (pkg == packageName) return true
+        if (pkg == "android") return true
+        if (pkg == "com.android.systemui") return true
+        if (pkg == "com.android.permissioncontroller") return true
+        if (pkg == "com.android.packageinstaller") return true
+        if (pkg == "com.android.shell") return true
+        if (pkg.endsWith(".systemui")) return true
+        if (pkg.endsWith(".permissioncontroller")) return true
+        if (pkg.contains(".launcher")) return true
+        return false
+    }
+
     companion object {
-        private const val THROTTLE_MS = 120L
+        private const val THROTTLE_MS = 40L
         private const val SPLASH_WINDOW_MS = 15000L
-        private const val WATCHDOG_MS = 2000L
+        private const val WATCHDOG_MS = 300L
     }
 }

@@ -204,3 +204,12 @@ data class AppRules(
 - 已验证：`./gradlew clean assembleDebug assembleRelease lintDebug` 构建成功，`./gradlew lintDebug` 0 errors / 0 warnings。
 - 发布包签名：根目录 `keystore.properties`（`storeFile` / `storePassword` / `keyAlias` / `keyPassword`）配置 `signingConfigs.release`，该文件与 `*.jks` 均不纳入版本库。
 - 真机验证：荣耀 PNM-AN10 / Android 16 / API 36 上完成真实开屏广告（拼多多）的点击跳过闭环。
+
+## 10. 延迟与稳定性设计
+
+- **会话生命周期**：单次扫描会话覆盖整个开屏窗口期（15 秒），轮询间隔自适应 50ms / 150ms / 300ms；切换应用时立即废弃旧会话并开启新会话（旧实现因会话过长导致换应用后长时间不扫描）；单会话有 15 秒硬上限，避免长期占用。
+- **遍历剪枝**：跨窗口遍历时一旦命中严格候选即提前结束本轮；规则扫描每 4 轮一次、通用跳过每轮都扫。
+- **看门狗**：每 300 毫秒复查一次前台包，窗口期未过且未成功动作时重新开启会话，弥补广告按钮晚于首个事件才渲染的情况。
+- **系统窗口排除**：除自身包与系统包外，额外排除 `com.android.permissioncontroller`、`com.android.packageinstaller`、`com.android.shell`，避免权限 / 安装弹窗抢占会话。
+- **运行前提**：荣耀 / 华为等深度管控系统需要在「应用启动管理」中关闭「自动管理」并放行自启动、后台活动，否则进程会被冻结且无障碍服务被反复重绑，表现为时好时坏。
+- **验证口径**：开屏跳过的验证必须在冷启动（先结束目标应用进程）且广告确实下发的条件下进行；控件树中没有「跳过」节点只说明本轮广告未下发。

@@ -16,6 +16,63 @@ object SplashSkipper {
 
     private const val MAX_STRICT_LENGTH = 8
 
+    private const val MAX_NODES = 3000
+
+    class ScanResult(
+        val candidate: AccessibilityNodeInfo?,
+        val texts: List<String>,
+        val visited: Int
+    )
+
+    fun scanRoots(
+        roots: List<AccessibilityNodeInfo>,
+        screenWidth: Int,
+        screenHeight: Int,
+        excluded: Set<String> = emptySet(),
+        collectTexts: Boolean = false
+    ): ScanResult {
+        var bestNode: AccessibilityNodeInfo? = null
+        var bestScore = 0
+        var visited = 0
+        val texts = ArrayList<String>(160)
+        for (item in roots) {
+            val queue = ArrayDeque<AccessibilityNodeInfo>()
+            queue.add(item)
+            while (queue.isNotEmpty() && visited < MAX_NODES) {
+                val node = queue.removeFirst()
+                visited++
+                if (collectTexts && texts.size < 150) {
+                    val text = runCatching { node.text?.toString() }.getOrNull().orEmpty()
+                    val description = runCatching { node.contentDescription?.toString() }.getOrNull().orEmpty()
+                    val id = runCatching { node.viewIdResourceName }.getOrNull().orEmpty()
+                    val merged = listOf(text, description, id).filter { it.isNotEmpty() }.joinToString("|")
+                    if (merged.isNotEmpty()) texts.add(merged.take(40))
+                }
+                val match = score(node)
+                if (match != null) {
+                    val bounds = NodeMatcher.boundsOf(node)
+                    if (bounds != null &&
+                        !excluded.contains(NodeMatcher.boundsKey(bounds)) &&
+                        acceptable(bounds, screenWidth, screenHeight, match.clickable, match.strict)
+                    ) {
+                        val total = match.score + if (match.clickable) 25 else 0
+                        if (total > bestScore) {
+                            bestScore = total
+                            bestNode = node
+                        }
+                        if (match.strict) return ScanResult(bestNode, texts, visited)
+                    }
+                }
+                val childCount = runCatching { node.childCount }.getOrNull() ?: 0
+                for (i in 0 until childCount) {
+                    val child = runCatching { node.getChild(i) }.getOrNull() ?: continue
+                    queue.add(child)
+                }
+            }
+        }
+        return ScanResult(bestNode, texts, visited)
+    }
+
     fun findCandidate(
         nodes: List<AccessibilityNodeInfo>,
         screenWidth: Int,
