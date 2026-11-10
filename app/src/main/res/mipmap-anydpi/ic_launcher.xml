@@ -1,16 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Android 8.0 以下旧设备的完整图标：翠绿方底 + 白色手机轮廓 + 对勾 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp"
     android:height="48dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#FF3F51B5"
+        android:fillColor="#FF0B9E6E"
         android:pathData="M0,0 L108,0 L108,108 L0,108 Z" />
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M30,38 L45,54 L30,70 L37,77 L59,54 L37,31 Z" />
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M42,30 L66,30 Q70,30 70,34 L70,74 Q70,78 66,78 L42,78 Q38,78 38,74 L38,34 Q38,30 42,30 Z" />
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M56,38 L71,54 L56,70 L63,77 L85,54 L63,31 Z" />
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M49,37 L59,37" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M42,56 L51,66 L76,42" />
 </vector>

@@ -3393,6 +3393,10 @@
         {
           "id": "以后再说",
           "action": "以后再说"
+        },
+        {
+          "id": "",
+          "action": "x:944y:203"
         }
       ]
     },
@@ -4511,5 +4515,31 @@
         }
       ]
     }
-  }
+  },
+  "globalRules": [
+    {
+      "id": "tt_splash_ad_logo",
+      "action": "tt_splash_skip_btn"
+    },
+    {
+      "id": "tt_splash_skip_btn",
+      "action": "tt_splash_skip_btn"
+    },
+    {
+      "id": "csj_ad_logo",
+      "action": "csj_btn_close"
+    },
+    {
+      "id": "csj_btn_close",
+      "action": "csj_btn_close"
+    },
+    {
+      "id": "native_ad_container",
+      "action": "topon_btn_close"
+    },
+    {
+      "id": "topon_btn_close",
+      "action": "topon_btn_close"
+    }
+  ]
 }

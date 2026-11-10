@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.LttClone" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <style name="Theme.FuChu" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">#FF3F51B5</item>
         <item name="colorPrimaryVariant">#FF303F9F</item>
         <item name="colorOnPrimary">#FFFFFFFF</item>

@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 10-27 招行排查结论：警告与服务配置无关——逐项对齐李跳跳（事件/反馈/flags/超时
+     完全相同）后警告仍弹，属招行按应用身份判别，配置层面无解，维持本工作配置。 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeAllMask"
     android:accessibilityFeedbackType="feedbackGeneric"
@@ -7,4 +9,4 @@
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description"
     android:notificationTimeout="100"
-    android:settingsActivity="com.example.lttclone.MainActivity" />
+    android:settingsActivity="com.fuchu.assistant.MainActivity" />

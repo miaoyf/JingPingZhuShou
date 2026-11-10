@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE = Path(
     "/var/folders/j0/68bggzcx5q5fvg_j9ht1c90c0000gn/T/opencode/wanggaolang-http1"
 )
-SOURCE_DIR = Path(os.environ.get("LTT_RULES_SRC", str(DEFAULT_SOURCE)))
+SOURCE_DIR = Path(os.environ.get("JP_RULES_SRC", str(DEFAULT_SOURCE)))
 OUTPUT = ROOT / "app" / "src" / "main" / "assets" / "rules.json"
 
 SOURCES = [

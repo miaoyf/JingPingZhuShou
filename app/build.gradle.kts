@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.lttclone"
+    namespace = "com.fuchu.assistant"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.lttclone"
+        applicationId = "com.fuchu.assistant"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
@@ -22,7 +22,7 @@ android {
             val props = Properties()
             val f = rootProject.file("keystore.properties")
             if (f.exists()) f.inputStream().use { props.load(it) }
-            storeFile = rootProject.file(props.getProperty("storeFile", "lttclone-release.jks"))
+            storeFile = rootProject.file(props.getProperty("storeFile", "jingping-release.jks"))
             storePassword = props.getProperty("storePassword", "")
             keyAlias = props.getProperty("keyAlias", "")
             keyPassword = props.getProperty("keyPassword", "")

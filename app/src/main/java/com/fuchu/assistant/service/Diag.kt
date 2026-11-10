@@ -1,4 +1,4 @@
-package com.example.lttclone.service
+package com.fuchu.assistant.service
 
 import android.content.Context
 import android.util.Log
@@ -8,10 +8,10 @@ import java.io.FileWriter
 
 object Diag {
 
-    private const val TAG = "LttService"
-    private const val FILE_NAME = "ltt_diag.log"
+    private const val TAG = "SkipService"
+    private const val FILE_NAME = "fu_diag.log"
     private const val MAX_BYTES = 512 * 1024
-    private const val TAIL_LINES = 200
+    private const val TAIL_LINES = 500
     private const val SIZE_CHECK_EVERY = 64
 
     @Volatile

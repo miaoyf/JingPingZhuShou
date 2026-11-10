@@ -1,4 +1,4 @@
-# 01 需求定义 — 李跳跳复刻（LttClone）
+# 01 需求定义 — 净屏助手
 
 - 版本：v1.0
 - 日期：2026-10-20
@@ -7,7 +7,7 @@
 
 ## 1. 项目背景与目标
 
-“李跳跳”是一款**不联网的单机 Android 应用**，通过无障碍服务监听窗口内容变化，自动点击开屏广告的“跳过”控件。原版已停更，作者声明推荐改用 GKD。原 APK 使用腾讯乐固加壳（`libshell-super.2019.so` 等），真实匹配算法无法静态获取。
+早期同类产品是一款**不联网的单机 Android 应用**，通过无障碍服务监听窗口内容变化，自动点击开屏广告的“跳过”控件。该类产品原版已停更。其 APK 使用腾讯乐固加壳（`libshell-super.2019.so` 等），真实匹配算法无法静态获取。
 
 本项目目标：**另行编写一套 Kotlin 原生 Android 无障碍 App**，实现与原版同等的核心能力，并内置开源规则库。
 
@@ -66,7 +66,7 @@
 
 以下为本项目自行决定的细节（非关键项），记录供事后一次性纠正：
 
-1. 包名 `com.example.lttclone`，应用名“李跳跳复刻”。
+1. 包名 `com.netscreen.assistant`，应用名“净屏助手”。
 2. 规则来源：本地规则仓库的 `BasicRules.json` / `AllRules.json` / `ExtendedRules.json`，由 `tools/convert_rules.py` 转换为单一 `assets/rules.json`。
 3. 规则合并策略：以 `AllRules` 为基线，`ExtendedRules` 补充，`BasicRules` 仅补入尚不存在的 `(id, action)` 对；同一 app 内按对去重。
 4. 事件节流 100ms，对齐原版 `notificationTimeout`。

@@ -1,33 +1,38 @@
-package com.example.lttclone
+package com.fuchu.assistant
 
-import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
+import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
+import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import com.example.lttclone.data.Prefs
-import com.example.lttclone.data.RuleRepository
-import com.example.lttclone.service.Diag
-import com.example.lttclone.service.KeepAliveService
-import com.example.lttclone.service.LttService
+import com.fuchu.assistant.data.Prefs
+import com.fuchu.assistant.data.RuleRepository
+import com.fuchu.assistant.service.Diag
+import com.fuchu.assistant.service.KeepAliveService
+import com.fuchu.assistant.service.SkipService
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.switchmaterial.SwitchMaterial
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var switchService: SwitchMaterial
     private lateinit var switchGeneric: SwitchMaterial
+    private lateinit var switchDiagText: SwitchMaterial
     private lateinit var tvStatus: TextView
     private lateinit var tvInfo: TextView
+    private lateinit var guideCard: MaterialCardView
+    private lateinit var tvGuideStep1: TextView
+    private lateinit var tvGuideStep2: TextView
     private var syncing = false
     private var guideShown = false
 
@@ -36,8 +41,18 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         switchService = findViewById(R.id.switch_service)
         switchGeneric = findViewById(R.id.switch_generic)
+        switchDiagText = findViewById(R.id.switch_diag_text)
         tvStatus = findViewById(R.id.tv_status)
         tvInfo = findViewById(R.id.tv_info)
+        guideCard = findViewById(R.id.guide_card)
+        tvGuideStep1 = findViewById(R.id.tv_guide_step1)
+        tvGuideStep2 = findViewById(R.id.tv_guide_step2)
+        findViewById<Button>(R.id.btn_guide_accessibility).setOnClickListener {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+        findViewById<Button>(R.id.btn_guide_battery).setOnClickListener {
+            requestIgnoreBatteryOptimizations()
+        }
         findViewById<Button>(R.id.btn_app_settings).setOnClickListener {
             startActivity(Intent(this, AppSettingActivity::class.java))
         }
@@ -53,7 +68,10 @@ class MainActivity : AppCompatActivity() {
             Prefs.setGenericSplashEnabled(this, checked)
             refreshInfo()
         }
-        requestNotificationPermission()
+        switchDiagText.setOnCheckedChangeListener { _, checked ->
+            if (syncing) return@setOnCheckedChangeListener
+            Prefs.setDiagTextEnabled(this, checked)
+        }
     }
 
     override fun onResume() {
@@ -70,6 +88,7 @@ class MainActivity : AppCompatActivity() {
         syncing = true
         switchService.isChecked = enabled
         switchGeneric.isChecked = Prefs.isGenericSplashEnabled(this)
+        switchDiagText.isChecked = Prefs.isDiagTextEnabled(this)
         syncing = false
         tvStatus.setText(if (enabled) R.string.main_service_on else R.string.main_service_off)
         if (enabled) {
@@ -78,13 +97,43 @@ class MainActivity : AppCompatActivity() {
             KeepAliveService.stop(this)
         }
         refreshInfo()
+        refreshGuide(enabled)
     }
 
-    private fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        val granted = checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        if (!granted) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+    /** 新手引导卡：服务开启 + 电池优化白名单都完成才隐藏 */
+    private fun refreshGuide(serviceEnabled: Boolean) {
+        val batteryOk = isIgnoringBatteryOptimizations()
+        tvGuideStep1.text = getString(
+            R.string.guide_step1_format,
+            getString(if (serviceEnabled) R.string.guide_state_done else R.string.guide_state_todo)
+        )
+        tvGuideStep2.text = getString(
+            R.string.guide_step2_format,
+            getString(if (batteryOk) R.string.guide_state_done else R.string.guide_state_todo)
+        )
+        guideCard.visibility = if (serviceEnabled && batteryOk) View.GONE else View.VISIBLE
+    }
+
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        return pm.isIgnoringBatteryOptimizations(packageName)
+    }
+
+    /** 直达系统电池优化白名单申请对话框；个别 ROM 不支持时退到电池优化列表页 */
+    private fun requestIgnoreBatteryOptimizations() {
+        val granted = isIgnoringBatteryOptimizations()
+        if (granted) {
+            Toast.makeText(this, R.string.guide_state_done, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val direct = Intent(
+            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+            Uri.parse("package:$packageName")
+        )
+        runCatching { startActivity(direct) }.onFailure {
+            runCatching {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
         }
     }
 
@@ -102,6 +151,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showDiag() {
+        // 打开诊断页时把完整日志导出到外部私有目录，adb 可直接读取用于深度排查
+        //（对话框只显示最近 120 行，完整文件 512KB 滚动）
+        runCatching {
+            val src = java.io.File(filesDir, "fu_diag.log")
+            val dstDir = getExternalFilesDir(null)
+            if (src.exists() && dstDir != null) {
+                src.copyTo(java.io.File(dstDir, "fu_diag_export.log"), overwrite = true)
+            }
+        }
         val enabledText = getString(
             if (isServiceEnabled()) R.string.main_service_on else R.string.main_service_off
         )
@@ -128,7 +186,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun copyDiag(text: String) {
         val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        manager.setPrimaryClip(ClipData.newPlainText("ltt_diag", text))
+        manager.setPrimaryClip(ClipData.newPlainText("fu_diag", text))
         Toast.makeText(this, R.string.diag_copied, Toast.LENGTH_SHORT).show()
     }
 
@@ -148,7 +206,7 @@ class MainActivity : AppCompatActivity() {
             contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
         ) ?: return false
-        val target = ComponentName(this, LttService::class.java)
+        val target = ComponentName(this, SkipService::class.java)
         return enabledServices.split(':').any { entry ->
             ComponentName.unflattenFromString(entry) == target
         }

@@ -1,4 +1,4 @@
-package com.example.lttclone.service
+package com.fuchu.assistant.service
 
 import android.graphics.Point
 import android.graphics.Rect

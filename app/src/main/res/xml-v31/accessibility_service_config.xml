@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 同 xml/accessibility_service_config.xml -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeAllMask"
     android:accessibilityFeedbackType="feedbackGeneric"
@@ -6,6 +7,5 @@
     android:canPerformGestures="true"
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description"
-    android:isAccessibilityTool="true"
     android:notificationTimeout="100"
-    android:settingsActivity="com.example.lttclone.MainActivity" />
+    android:settingsActivity="com.fuchu.assistant.MainActivity" />

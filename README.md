@@ -1,6 +1,6 @@
-# 李跳跳复刻（LttClone）
+# 净屏助手
 
-用 Kotlin 原生无障碍服务（AccessibilityService）自动识别并跳过开屏广告，复刻「李跳跳」的核心能力。
+用 Kotlin 原生无障碍服务（AccessibilityService）自动识别并跳过开屏广告。
 
 本项目为独立实现，内置 AGPL-3.0 开源规则库（[wanggaolang/LiTiaotiao](https://github.com/wanggaolang/LiTiaotiao)）。
 
@@ -37,7 +37,7 @@
 ## 构建
 
 ```bash
-cd LiTiaotiaoClone
+cd FuChu
 ./gradlew clean assembleDebug       # 调试包（可查看运行日志）
 ./gradlew clean assembleRelease     # 发布包（使用 keystore.properties 中的签名）
 ./gradlew lintDebug                 # 静态检查
@@ -53,24 +53,24 @@ app/build/outputs/apk/release/app-release.apk
 发布包签名配置在工程根目录 `keystore.properties`（**该文件与 `.jks` 密钥不入库**）：
 
 ```
-storeFile=lttclone-release.jks
+storeFile=jingping-release.jks
 storePassword=<你的密码>
-keyAlias=lttclone
+keyAlias=jingping
 keyPassword=<你的密码>
 ```
 
 生成签名密钥：
 
 ```bash
-keytool -genkeypair -keystore lttclone-release.jks -alias lttclone \
+keytool -genkeypair -keystore jingping-release.jks -alias jingping \
   -keyalg RSA -keysize 2048 -validity 10000 \
-  -dname "CN=LiTiaotiaoClone, O=LiTiaotiaoClone, C=CN"
+  -dname "CN=JingPingZhuShou, O=JingPingZhuShou, C=CN"
 ```
 
 工程根目录另附两份可直接安装的副本：
 
-- `LiTiaotiaoClone-debug.apk`（Android Debug 签名，可读取运行日志）
-- `LiTiaotiaoClone-release.apk`（自签名，不可调试、体积更小，正式使用推荐）
+- `FuChu-debug.apk`（Android Debug 签名，可读取运行日志）
+- `FuChu-release.apk`（自签名，不可调试、体积更小，正式使用推荐）
 
 安装到设备：
 
@@ -94,11 +94,11 @@ sdk.dir=/opt/homebrew/share/android-commandlinetools
 
 ## 使用方式
 
-1. 安装并打开应用「李跳跳复刻」。
-2. 主界面顶部显示无障碍服务状态。**必须**点「无障碍服务」开关跳转到系统设置页，找到「李跳跳复刻服务」并真正开启（首次开启会有系统确认弹窗，要点「允许」）。只安装 APK 不开服务不会生效。
+1. 安装并打开应用「净屏助手」。
+2. 主界面顶部显示无障碍服务状态。**必须**点「无障碍服务」开关跳转到系统设置页，找到「净屏助手服务」并真正开启（首次开启会有系统确认弹窗，要点「允许」）。只安装 APK 不开服务不会生效。
 3. **开启服务后，请再回到本应用打开一次主界面**。荣耀 / 华为 / 小米等系统会冻结长时间未在后台运行的进程，未先打开一次时服务可能收不到事件。
 4. **在系统「应用启动管理」中放行本应用（荣耀 / 华为 / 小米等必做，属于本应用的运行前提）**：
-   > 设置 → 应用 → 应用启动管理 → 李跳跳复刻 → **关闭「自动管理」**，并允许「自启动」「后台活动」「关联启动」
+   > 设置 → 应用 → 应用启动管理 → 净屏助手 → **关闭「自动管理」**，并允许「自启动」「后台活动」「关联启动」
 
    系统若接管「自动管理」，会在应用退到后台约 7 秒后冻结进程，并让系统每 4 秒左右重���次绑定无障碍服务，绑定空窗期内开屏广告按钮会漏掉，表现为「时好时坏」。关闭「自动管理」后系统不再接管本进程，事件通道保持畅通。
 5. 返回应用，状态应变为「服务已开启」。若仍显示未开启，说明系统设置里没有真正打开该服务。
@@ -117,7 +117,7 @@ sdk.dir=/opt/homebrew/share/android-commandlinetools
 
 若使用荣耀 / 华为 / 小米等深度管控系统，还需手动放行：
 
-> 设置 → 应用 → 应用启动管理 → 李跳跳复刻 → 允许「自启动」「后台活动」「关联启动」
+> 设置 → 应用 → 应用启动管理 → 净屏助手 → 允许「自启动」「后台活动」「关联启动」
 
 ### 诊断信息
 
@@ -130,16 +130,16 @@ sdk.dir=/opt/homebrew/share/android-commandlinetools
 也可在已连接 adb 的电脑上直接读取（debug 包）：
 
 ```bash
-adb shell run-as com.example.lttclone cat files/ltt_diag.log
+adb shell run-as com.netscreen.assistant cat files/jp_diag.log
 ```
 
-排查提示：部分国产 ROM 会屏蔽第三方应用的 logcat 输出，因此本应用把关键日志同时写入应用私有目录 `files/ltt_diag.log`，用上面的命令查看。日志中的关键行：`service connected` / `event type=… pkg=…` / `foreground package=…` / `scan pkg=… nodes=… rules=…` / `tap x=… y=… text=…` / `acted key=… method=…` / `action confirmed key=…`。
+排查提示：部分国产 ROM 会屏蔽第三方应用的 logcat 输出，因此本应用把关键日志同时写入应用私有目录 `files/jp_diag.log`，用上面的命令查看。日志中的关键行：`service connected` / `event type=… pkg=…` / `foreground package=…` / `scan pkg=… nodes=… rules=…` / `tap x=… y=… text=…` / `acted key=… method=…` / `action confirmed key=…`。
 
 ## 工作原理
 
 ```
 AccessibilityEvent
-   └─ LttService（无障碍服务）
+   └─ SkipService（无障碍服务）
         ├─ 前台包名开关判断（Prefs.isAppEnabled）
          ├─ 记录前台应用与「开屏窗口期」（切前台后 15 秒内）
          ├─ 看门狗：每 300 毫秒复查一次，前台应用未变且窗口期未过则重新开启扫描会话
@@ -181,7 +181,7 @@ AccessibilityEvent
 - 规则去重键：`(id, action)`
 - 规模：328 个应用、794 条规则（其中 56 条规则的 `id` 含 `&`，需按 OR 拆分匹配）
 
-> **重要说明**：上游是「李跳跳自定义规则」集合，主要覆盖**应用内广告、更新弹窗、青少年模式、权限提示**，开屏广告规则极少（仅 `tt_splash_skip_btn` 等个别几条）。因此本项目在规则引擎之外**额外实现了通用开屏广告启发式**，用于跳过规则库未覆盖的应用的开屏广告。
+> **重要说明**：上游是开源的「自定义规则」集合，主要覆盖**应用内广告、更新弹窗、青少年模式、权限提示**，开屏广告规则极少（仅 `tt_splash_skip_btn` 等个别几条）。因此本项目在规则引擎之外**额外实现了通用开屏广告启发式**，用于跳过规则库未覆盖的应用的开屏广告。
 
 规则字段语义（与上游一致）：
 
@@ -194,8 +194,8 @@ AccessibilityEvent
 重新生成内置规则：
 
 ```bash
-# 默认从上游仓库检出目录读取；可用 LTT_RULES_SRC 指定源目录
-export LTT_RULES_SRC=/path/to/LiTiaotiao
+# 默认从上游仓库检出目录读取；可用 JP_RULES_SRC 指定源目录
+export JP_RULES_SRC=/path/to/LiTiaotiao
 python3 tools/convert_rules.py
 ```
 
@@ -235,14 +235,14 @@ selfcheck: apps=328 rule_pairs=794 trailing_comma_fixes=9 unparsed=0 duplicates=
 ## 项目结构
 
 ```
-LiTiaotiaoClone/
+FuChu/
 ├── app/
 │   ├── build.gradle.kts                  # 模块配置：SDK、依赖、Java 17
 │   ├── proguard-rules.pro                # 混淆规则
 │   └── src/main/
 │       ├── AndroidManifest.xml           # 权限、Activity、无障碍 Service 声明
 │       ├── assets/rules.json             # 内置规则（脚本产出）
-│       ├── java/com/example/lttclone/
+│       ├── java/com/jingping/zhushou/
 │       │   ├── App.kt                    # Application 入口
 │       │   ├── MainActivity.kt           # 主界面：服务状态 / 通用跳过开关 / 引导
 │       │   ├── AppSettingActivity.kt     # 按应用开关列表 + 规则查看
@@ -251,12 +251,12 @@ LiTiaotiaoClone/
 │       │   │   ├── RuleRepository.kt     # assets 解析与缓存
 │       │   │   └── Prefs.kt              # 总开关 / 按应用开关 / 通用跳过开关
 │       │   └── service/
-│       │       ├── LttService.kt         # 无障碍服务接入、前台窗口期管理、看门狗、保活拉起
+│       │       ├── SkipService.kt         # 无障碍服务接入、前台窗口期管理、看门狗、保活拉起
 │       │       ├── RuleMatcher.kt        # 会话式匹配与点击引擎
 │       │       ├── NodeMatcher.kt        # 节点定位：OR 拆分、打分择优、bounds/坐标解析
 │       │       ├── SplashSkipper.kt      # 通用开屏广告按钮启发式识别
 │       │       ├── KeepAliveService.kt   # 后台保活前台服务（specialUse）
-│       │       └── Diag.kt               # 运行日志：logcat + files/ltt_diag.log 双通道
+│       │       └── Diag.kt               # 运行日志：logcat + files/jp_diag.log 双通道
 │       └── res/
 │           ├── drawable/ic_stat_keepalive.xml  # 保活通知小图标
 │           ├── layout/                   # activity_main / activity_app_setting / item_app_info
@@ -295,7 +295,7 @@ LiTiaotiaoClone/
 
 - `./gradlew assembleDebug` 构建成功，产出 `app/build/outputs/apk/debug/app-debug.apk`（约 5.8 MB，debug 签名已校验）
 - `./gradlew lintDebug` 结果：**0 errors, 0 warnings**
-- `aapt2 dump badging` 校验通过：包名 `com.example.lttclone`、minSdk 24 / targetSdk 34 / compileSdk 34、launcher 为 `MainActivity`、仅声明 `QUERY_ALL_PACKAGES`
+- `aapt2 dump badging` 校验通过：包名 `com.netscreen.assistant`（applicationId，代码包 `com.jingping.zhushou`）、minSdk 24 / targetSdk 34 / compileSdk 34、launcher 为 `MainActivity`、仅声明 `QUERY_ALL_PACKAGES`
 - 打包产物内含 `assets/rules.json`（92561 字节），无障碍服务在合并后 Manifest 中正确声明 `android.accessibilityservice.AccessibilityService` 与 `accessibilityservice` meta-data
 
 模拟器（Android 14 / API 34 / arm64）端到端验证（mock 广告应用 `com.example.lttmock`）：
@@ -304,7 +304,7 @@ LiTiaotiaoClone/
 | --- | --- |
 | 主界面渲染 | 通过（标题 / 副标题 / 服务开关 / 通用跳过开关 / 状态 / 应用设置按钮均正常） |
 | 按应用开关页 | 通过（列出已安装应用，每项带开关） |
-| 无障碍服务绑定 | 通过（label=李跳跳复刻服务，TYPES_ALL_MASK，notificationTimeout=100） |
+| 无障碍服务绑定 | 通过（label=净屏助手服务，TYPES_ALL_MASK，notificationTimeout=100） |
 | 通用开屏跳过 | 通过（规则库无该应用时仍点击「跳过」按钮，日志 `acted key=__ltt_generic_skip__`） |
 | 规则 `&` OR 语义 | 通过（`id="为何会看到此广告&不存在的备选"` 正确命中第一段，并按 `action="不感兴趣"` 点中 `btn_dislike`） |
 | 精确匹配优先 | 通过（存在「跳过」文案时点中按钮而非包含「跳过」的说明文字） |
@@ -318,11 +318,11 @@ LiTiaotiaoClone/
 
 | 验证项 | 结果 |
 | --- | --- |
-| 无障碍服务绑定 | 通过（`Bound services` 含李跳跳复刻服务，`TYPES_ALL_MASK`） |
+| 无障碍服务绑定 | 通过（`Bound services` 含净屏助手服务，`TYPES_ALL_MASK`） |
 | 通用开屏跳过（拼多多真实广告页） | 通过（日志 `tap x=987 y=213 text=跳过` → `acted key=__ltt_generic_skip__` → `action confirmed`，随后页面不再存在「跳过」节点，焦点落在 `HomeActivity`） |
 | 纯手势点击有效性（隔离掉库内 `GLOBAL_ACTION_BACK` 规则） | 通过（仅手势即完成跳过，未依赖返回键兜底） |
 | 规则命中（库内规则） | 通过（拼多多命中 7 条规则） |
-| 诊断日志通道 | 通过（`files/ltt_diag.log` 可读；该 ROM 屏蔽第三方 logcat） |
+| 诊断日志通道 | 通过（`files/jp_diag.log` 可读；该 ROM 屏蔽第三方 logcat） |
 | 后台保活前台服务 | 通过（`ServiceRecord … KeepAliveService isForeground=true types=0x40000000`） |
 | release 包签名与安装 | 通过（自签名证书校验通过，无 `debuggable` 标记） |
 
@@ -381,6 +381,6 @@ LiTiaotiaoClone/
 
 > 验证过程中的两个环境坑（真机/模拟器通用）：
 > 重装 APK 会清掉无障碍服务绑定，需要重新执行
-> `adb shell settings put secure enabled_accessibility_services com.example.lttclone/.service.LttService` 与
+> `adb shell settings put secure enabled_accessibility_services com.netscreen.assistant/com.jingping.zhushou.service.SkipService` 与
 > `adb shell settings put secure accessibility_enabled 1`；
 > 对无障碍服务所在包执行 `am force-stop` 会**禁用**该服务，测试时请改为对目标应用执行。

@@ -1,4 +1,4 @@
-package com.example.lttclone
+package com.fuchu.assistant
 
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -9,8 +9,8 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.example.lttclone.data.Prefs
-import com.example.lttclone.data.RuleRepository
+import com.fuchu.assistant.data.Prefs
+import com.fuchu.assistant.data.RuleRepository
 import com.google.android.material.switchmaterial.SwitchMaterial
 
 class AppSettingActivity : AppCompatActivity() {

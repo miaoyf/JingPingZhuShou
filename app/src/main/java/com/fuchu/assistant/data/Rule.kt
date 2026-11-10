@@ -1,4 +1,4 @@
-package com.example.lttclone.data
+package com.fuchu.assistant.data
 
 data class Rule(
     val id: String,
